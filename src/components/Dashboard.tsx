@@ -51,6 +51,7 @@ export const Dashboard: React.FC = () => {
       const { data, error } = await supabase
         .from('canvases')
         .select('*')
+        .eq('owner_id', user?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
