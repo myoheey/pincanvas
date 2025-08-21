@@ -74,7 +74,7 @@ export const Dashboard: React.FC = () => {
         .from('canvases')
         .insert({
           title: formData.title,
-          image_url: formData.imageUrl || null,
+          image_url: formData.imagePreview || null,
           owner_id: user.id
         })
         .select()
