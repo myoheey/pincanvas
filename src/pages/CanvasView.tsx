@@ -73,10 +73,10 @@ const CanvasView = () => {
     if (!canvasData) {
       canvasData = {
         id: id || '1',
-        title: id === '1' ? '서울 여행 계획' : '프로젝트 기획서',
+        title: '새 캔버스',
         imageUrl: '/placeholder.svg',
         createdAt: new Date(),
-        pinCount: 0, // 기본 핀 없음
+        pinCount: 0,
         layerCount: 1,
       };
     }
@@ -86,11 +86,12 @@ const CanvasView = () => {
     const savedPins = localStorage.getItem(`pincanvas_pins_${id}`);
 
     let layersData: Layer[] = [];
-    let pinsData: PinData[] = []; // 기본 핀 없음
+    let pinsData: PinData[] = [];
 
     if (savedLayers) {
       layersData = JSON.parse(savedLayers);
     } else {
+      // 기본 레이어 하나만 생성 (제목없는 레이어)
       layersData = [
         {
           id: 'layer1',
@@ -106,7 +107,7 @@ const CanvasView = () => {
     if (savedPins) {
       pinsData = JSON.parse(savedPins);
     }
-    // 기본 핀 생성 코드 제거
+    // 기본 핀은 생성하지 않음
 
     setCanvas(canvasData);
     setLayers(layersData);
