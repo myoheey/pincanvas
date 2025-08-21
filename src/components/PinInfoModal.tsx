@@ -337,7 +337,7 @@ export const PinInfoModal: React.FC<PinInfoModalProps> = ({
               </div>
 
               {/* Comments and Likes */}
-              {pin && (allowComments || allowLikes) && (
+              {pin && (allowComments || allowLikes) && !isNewPin && (
                 <div className="mt-6 pt-4 border-t">
                   <CommentSystem
                     pinId={pin.id}
