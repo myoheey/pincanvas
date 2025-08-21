@@ -70,6 +70,24 @@ export const Dashboard: React.FC = () => {
     if (!user) return;
 
     try {
+      // Check canvas limit (10 per user)
+      const { count, error: countError } = await supabase
+        .from('canvases')
+        .select('*', { count: 'exact', head: true })
+        .eq('owner_id', user.id);
+
+      if (countError) throw countError;
+
+      if (count && count >= 10) {
+        toast({
+          title: "캔버스 개수 제한",
+          description: "한 계정당 최대 10개의 캔버스만 생성할 수 있습니다.",
+          variant: "destructive",
+        });
+        setIsCreateModalOpen(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('canvases')
         .insert({
@@ -82,7 +100,7 @@ export const Dashboard: React.FC = () => {
 
       if (error) throw error;
 
-      // Create default layers
+      // Create default layers only
       if (data) {
         await supabase.from('layers').insert([
           {

@@ -75,6 +75,23 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
+      // Check canvas limit (10 per user)
+      const { count, error: countError } = await supabase
+        .from('canvases')
+        .select('*', { count: 'exact', head: true })
+        .eq('owner_id', user.id);
+
+      if (countError) throw countError;
+
+      if (count && count >= 10) {
+        toast({
+          title: "캔버스 개수 제한",
+          description: "한 계정당 최대 10개의 캔버스만 생성할 수 있습니다.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('canvases')
         .insert({
@@ -87,7 +104,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
 
       if (error) throw error;
 
-      // Create default layer
+      // Create default layer only (no pins)
       if (data) {
         await supabase.from('layers').insert([
           {

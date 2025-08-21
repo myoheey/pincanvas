@@ -67,15 +67,15 @@ const CanvasView = () => {
       canvasData = canvases.find((c: Canvas) => c.id === id) || null;
     }
     
-    // 캔버스가 없으면 임시 데이터 사용
+    // 캔버스가 없으면 기본 데이터 대신 빈 상태로 유지
     if (!canvasData) {
       canvasData = {
         id: id || '1',
         title: id === '1' ? '서울 여행 계획' : '프로젝트 기획서',
         imageUrl: '/placeholder.svg',
         createdAt: new Date(),
-        pinCount: 3,
-        layerCount: 2,
+        pinCount: 0, // 기본 핀 없음
+        layerCount: 1,
       };
     }
 
@@ -84,7 +84,7 @@ const CanvasView = () => {
     const savedPins = localStorage.getItem(`pincanvas_pins_${id}`);
 
     let layersData: Layer[] = [];
-    let pinsData: PinData[] = [];
+    let pinsData: PinData[] = []; // 기본 핀 없음
 
     if (savedLayers) {
       layersData = JSON.parse(savedLayers);
@@ -92,14 +92,7 @@ const CanvasView = () => {
       layersData = [
         {
           id: 'layer1',
-          name: '맛집',
-          color: '#ef4444',
-          visible: true,
-          canvasId: id || '1',
-        },
-        {
-          id: 'layer2',
-          name: '관광지',
+          name: '기본 레이어',
           color: '#3b82f6',
           visible: true,
           canvasId: id || '1',
@@ -110,29 +103,8 @@ const CanvasView = () => {
 
     if (savedPins) {
       pinsData = JSON.parse(savedPins);
-    } else {
-      pinsData = [
-        {
-          id: 'pin1',
-          x: 200,
-          y: 150,
-          title: '경복궁',
-          description: '조선 시대의 대표적인 궁궐입니다.\n\n운영시간: 09:00-18:00\n입장료: 성인 3,000원',
-          layerId: 'layer2',
-          canvasId: id || '1',
-        },
-        {
-          id: 'pin2',
-          x: 350,
-          y: 220,
-          title: '명동 교자',
-          description: '유명한 만두 맛집입니다.\n\n추천메뉴: 왕만두, 물만두\n가격대: 10,000원~15,000원',
-          layerId: 'layer1',
-          canvasId: id || '1',
-        },
-      ];
-      localStorage.setItem(`pincanvas_pins_${id}`, JSON.stringify(pinsData));
     }
+    // 기본 핀 생성 코드 제거
 
     setCanvas(canvasData);
     setLayers(layersData);
