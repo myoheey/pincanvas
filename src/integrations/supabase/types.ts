@@ -14,7 +14,216 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      canvas_shares: {
+        Row: {
+          canvas_id: string
+          created_at: string
+          id: string
+          permission: string
+          shared_by: string
+          shared_with_email: string
+        }
+        Insert: {
+          canvas_id: string
+          created_at?: string
+          id?: string
+          permission: string
+          shared_by: string
+          shared_with_email: string
+        }
+        Update: {
+          canvas_id?: string
+          created_at?: string
+          id?: string
+          permission?: string
+          shared_by?: string
+          shared_with_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_shares_canvas_id_fkey"
+            columns: ["canvas_id"]
+            isOneToOne: false
+            referencedRelation: "canvases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      canvases: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string | null
+          owner_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          owner_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          owner_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      layers: {
+        Row: {
+          canvas_id: string
+          color: string
+          created_at: string
+          id: string
+          name: string
+          visible: boolean
+        }
+        Insert: {
+          canvas_id: string
+          color: string
+          created_at?: string
+          id?: string
+          name: string
+          visible?: boolean
+        }
+        Update: {
+          canvas_id?: string
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "layers_canvas_id_fkey"
+            columns: ["canvas_id"]
+            isOneToOne: false
+            referencedRelation: "canvases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_items: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+          pin_id: string
+          type: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          pin_id: string
+          type: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          pin_id?: string
+          type?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_items_pin_id_fkey"
+            columns: ["pin_id"]
+            isOneToOne: false
+            referencedRelation: "pins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pins: {
+        Row: {
+          canvas_id: string
+          created_at: string
+          description: string | null
+          id: string
+          layer_id: string
+          title: string
+          updated_at: string
+          x: number
+          y: number
+        }
+        Insert: {
+          canvas_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          layer_id: string
+          title: string
+          updated_at?: string
+          x: number
+          y: number
+        }
+        Update: {
+          canvas_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          layer_id?: string
+          title?: string
+          updated_at?: string
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pins_canvas_id_fkey"
+            columns: ["canvas_id"]
+            isOneToOne: false
+            referencedRelation: "canvases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pins_layer_id_fkey"
+            columns: ["layer_id"]
+            isOneToOne: false
+            referencedRelation: "layers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
