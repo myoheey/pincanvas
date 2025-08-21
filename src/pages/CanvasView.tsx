@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X } from 'lucide-react';
+import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { PinInfoModal } from '@/components/PinInfoModal';
 import { CreateLayerModal } from '@/components/CreateLayerModal';
+import { ShareCanvasModal } from '@/components/ShareCanvasModal';
 import ImageIcon from '@/components/ui/icons/ImageIcon';
 
 interface Canvas {
@@ -56,6 +57,7 @@ const CanvasView = () => {
   const [isCreateLayerModalOpen, setIsCreateLayerModalOpen] = useState(false);
   const [isCreatingNewPin, setIsCreatingNewPin] = useState(false);
   const [isPresentationMode, setIsPresentationMode] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   useEffect(() => {
     // 로컬 스토리지에서 캔버스 데이터 가져오기
@@ -92,7 +94,7 @@ const CanvasView = () => {
       layersData = [
         {
           id: 'layer1',
-          name: '기본 레이어',
+          name: '제목없는 레이어',
           color: '#3b82f6',
           visible: true,
           canvasId: id || '1',
@@ -275,6 +277,14 @@ const CanvasView = () => {
                 <Badge variant="secondary">
                   선택된 레이어: {layers.find(l => l.id === selectedLayerId)?.name || '없음'}
                 </Badge>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsShareModalOpen(true)}
+                  aria-label="Share Canvas"
+                >
+                  <Share className="w-5 h-5" />
+                </Button>
                 <Button
                   variant="outline"
                   size="icon"
@@ -514,6 +524,14 @@ const CanvasView = () => {
         isOpen={isCreateLayerModalOpen}
         onClose={() => setIsCreateLayerModalOpen(false)}
         onSubmit={handleCreateLayer}
+      />
+
+      {/* Share Canvas Modal */}
+      <ShareCanvasModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        canvasId={id || ''}
+        canvasTitle={canvas?.title || ''}
       />
     </div>
   );

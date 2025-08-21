@@ -108,7 +108,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
       if (data) {
         await supabase.from('layers').insert([
           {
-            name: '기본 레이어',
+            name: '제목없는 레이어',
             color: '#3b82f6',
             canvas_id: data.id
           }
