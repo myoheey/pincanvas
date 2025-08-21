@@ -1,77 +1,140 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Grid, List } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Filter, Grid, LogOut, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { CanvasGrid } from './CanvasGrid';
 import { CreateCanvasModal } from './CreateCanvasModal';
+import { ShareCanvasModal } from './ShareCanvasModal';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface Canvas {
   id: string;
   title: string;
-  imageUrl: string;
-  createdAt: Date;
-  pinCount: number;
-  layerCount: number;
+  image_url: string;
+  created_at: string;
+  owner_id: string;
+  pinCount?: number;
+  layerCount?: number;
 }
 
 export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, signOut, loading } = useAuth();
+  const { toast } = useToast();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [shareModalCanvasId, setShareModalCanvasId] = useState<string | null>(null);
+  const [shareModalCanvasTitle, setShareModalCanvasTitle] = useState('');
   const [canvases, setCanvases] = useState<Canvas[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'pins'>('date');
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Redirect unauthenticated users
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
 
   useEffect(() => {
-    // 로컬 스토리지에서 캔버스 목록 불러오기
-    const savedCanvases = localStorage.getItem('pincanvas_canvases');
-    if (savedCanvases) {
-      const parsedCanvases = JSON.parse(savedCanvases).map((canvas: any) => ({
-        ...canvas,
-        createdAt: new Date(canvas.createdAt)
-      }));
-      setCanvases(parsedCanvases);
-    } else {
-      // 초기 더미 데이터
-      const initialCanvases: Canvas[] = [
-        {
-          id: '1',
-          title: '서울 여행 계획',
-          imageUrl: '/placeholder.svg',
-          createdAt: new Date('2024-01-15'),
-          pinCount: 12,
-          layerCount: 3,
-        },
-        {
-          id: '2',
-          title: '프로젝트 기획서',
-          imageUrl: '/placeholder.svg',
-          createdAt: new Date('2024-01-10'),
-          pinCount: 8,
-          layerCount: 2,
-        },
-      ];
-      setCanvases(initialCanvases);
-      localStorage.setItem('pincanvas_canvases', JSON.stringify(initialCanvases));
+    if (user) {
+      fetchCanvases();
     }
-  }, []);
+  }, [user]);
 
-  const handleCreateCanvas = (formData: any) => {
-    const newCanvas: Canvas = {
-      id: Date.now().toString(),
-      title: formData.title,
-      imageUrl: formData.imageUrl || '/placeholder.svg',
-      createdAt: new Date(),
-      pinCount: 0,
-      layerCount: 0,
-    };
+  const fetchCanvases = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('canvases')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    const updatedCanvases = [newCanvas, ...canvases];
-    setCanvases(updatedCanvases);
-    
-    // 로컬 스토리지에 저장
-    localStorage.setItem('pincanvas_canvases', JSON.stringify(updatedCanvases));
+      if (error) throw error;
+      setCanvases(data || []);
+    } catch (error) {
+      console.error('Error fetching canvases:', error);
+      toast({
+        title: "오류",
+        description: "캔버스 목록을 불러올 수 없습니다.",
+        variant: "destructive",
+      });
+    }
+    setIsLoading(false);
+  };
+
+  const handleCreateCanvas = async (formData: any) => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('canvases')
+        .insert({
+          title: formData.title,
+          image_url: formData.imageUrl || null,
+          owner_id: user.id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Create default layers
+      if (data) {
+        await supabase.from('layers').insert([
+          {
+            name: '기본 레이어',
+            color: '#3b82f6',
+            canvas_id: data.id
+          }
+        ]);
+
+        toast({
+          title: "캔버스 생성 완료",
+          description: "새 캔버스가 생성되었습니다.",
+        });
+
+        fetchCanvases();
+      }
+    } catch (error) {
+      console.error('Error creating canvas:', error);
+      toast({
+        title: "생성 실패",
+        description: "캔버스 생성 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
     
     setIsCreateModalOpen(false);
   };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  const handleShare = (canvasId: string, canvasTitle: string) => {
+    setShareModalCanvasId(canvasId);
+    setShareModalCanvasTitle(canvasTitle);
+  };
+
+  if (loading || (user && isLoading)) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-muted-foreground">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const filteredCanvases = canvases.filter(canvas =>
     canvas.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -83,20 +146,36 @@ export const Dashboard: React.FC = () => {
       <header className="bg-white/80 backdrop-blur-sm border-b border-border/50 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-orange-500 bg-clip-text text-transparent">
-                PinCanvas
-              </h1>
-              <p className="text-muted-foreground">이미지 위에 정보를 정리하고 관리하세요</p>
+            <div className="flex items-center space-x-4">
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-orange-500 bg-clip-text text-transparent">
+                  PinCanvas
+                </h1>
+                <p className="text-muted-foreground">이미지 위에 정보를 정리하고 관리하세요</p>
+              </div>
+              {user && (
+                <Badge variant="outline" className="ml-4">
+                  {user.email}
+                </Badge>
+              )}
             </div>
             
-            <Button 
-              onClick={() => setIsCreateModalOpen(true)}
-              className="gradient-primary text-white border-0 hover:scale-105 transition-transform"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              새 캔버스
-            </Button>
+            <div className="flex items-center space-x-2">
+              <Button 
+                onClick={() => setIsCreateModalOpen(true)}
+                className="gradient-primary text-white border-0 hover:scale-105 transition-transform"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                새 캔버스
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSignOut}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                로그아웃
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -131,7 +210,12 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Canvas Grid */}
-        <CanvasGrid searchQuery={searchTerm} sortBy={sortBy} />
+        <CanvasGrid 
+          searchQuery={searchTerm} 
+          sortBy={sortBy} 
+          canvases={filteredCanvases}
+          onShare={handleShare}
+        />
       </main>
 
       {/* Create Canvas Modal */}
@@ -140,6 +224,16 @@ export const Dashboard: React.FC = () => {
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateCanvas}
       />
+
+      {/* Share Canvas Modal */}
+      {shareModalCanvasId && (
+        <ShareCanvasModal
+          isOpen={!!shareModalCanvasId}
+          onClose={() => setShareModalCanvasId(null)}
+          canvasId={shareModalCanvasId}
+          canvasTitle={shareModalCanvasTitle}
+        />
+      )}
     </div>
   );
 };
