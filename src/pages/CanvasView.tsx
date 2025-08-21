@@ -8,9 +8,11 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { PinInfoModal } from '@/components/PinInfoModal';
 import { CreateLayerModal } from '@/components/CreateLayerModal';
 import { ShareCanvasModal } from '@/components/ShareCanvasModal';
+import { CanvasSettingsModal } from '@/components/CanvasSettingsModal';
 import ImageIcon from '@/components/ui/icons/ImageIcon';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Canvas {
   id: string;
@@ -19,6 +21,9 @@ interface Canvas {
   createdAt: Date;
   pinCount: number;
   layerCount: number;
+  ownerId: string;
+  allowComments: boolean;
+  allowLikes: boolean;
 }
 
 interface Layer {
@@ -50,6 +55,7 @@ interface PinData {
 const CanvasView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   const [layers, setLayers] = useState<Layer[]>([]);
   const [pins, setPins] = useState<PinData[]>([]);
@@ -60,6 +66,7 @@ const CanvasView = () => {
   const [isCreatingNewPin, setIsCreatingNewPin] = useState(false);
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -90,6 +97,9 @@ const CanvasView = () => {
           createdAt: new Date(canvasData.created_at),
           pinCount: 0,
           layerCount: 0,
+          ownerId: canvasData.owner_id,
+          allowComments: canvasData.allow_comments,
+          allowLikes: canvasData.allow_likes,
         });
 
         // 레이어 데이터 가져오기
@@ -435,6 +445,18 @@ const CanvasView = () => {
     }
   };
 
+  const handleCanvasSettingsUpdate = (settings: { allow_comments: boolean; allow_likes: boolean }) => {
+    if (canvas) {
+      setCanvas({
+        ...canvas,
+        allowComments: settings.allow_comments,
+        allowLikes: settings.allow_likes,
+      });
+    }
+  };
+
+  const isOwner = canvas && user?.id === canvas.ownerId;
+
   return (
     <div className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 ${isPresentationMode ? 'p-0' : ''}`}>
       {/* Header */}
@@ -462,6 +484,14 @@ const CanvasView = () => {
                 <Badge variant="secondary">
                   선택된 레이어: {layers.find(l => l.id === selectedLayerId)?.name || '없음'}
                 </Badge>
+                {isOwner && canvas && (
+                  <CanvasSettingsModal
+                    canvasId={canvas.id}
+                    allowComments={canvas.allowComments}
+                    allowLikes={canvas.allowLikes}
+                    onSettingsUpdate={handleCanvasSettingsUpdate}
+                  />
+                )}
                 <Button
                   variant="outline"
                   size="icon"
@@ -694,15 +724,21 @@ const CanvasView = () => {
       </div>
 
       {/* Pin Info Modal */}
-      <PinInfoModal
-        pin={selectedPin}
-        isOpen={isPinModalOpen}
-        onClose={handlePinModalClose}
-        onUpdate={handlePinUpdate}
-        onDelete={handlePinDelete}
-        layerColor={selectedPin ? getLayerColor(selectedPin.layerId) : '#6b7280'}
-        isNewPin={isCreatingNewPin}
-      />
+      {canvas && (
+        <PinInfoModal
+          pin={selectedPin}
+          isOpen={isPinModalOpen}
+          onClose={handlePinModalClose}
+          onUpdate={handlePinUpdate}
+          onDelete={handlePinDelete}
+          layerColor={selectedPin ? getLayerColor(selectedPin.layerId) : '#6b7280'}
+          isNewPin={isCreatingNewPin}
+          canvasOwnerId={canvas.ownerId}
+          allowComments={canvas.allowComments}
+          allowLikes={canvas.allowLikes}
+          isOwner={isOwner || false}
+        />
+      )}
 
       {/* Create Layer Modal */}
       <CreateLayerModal

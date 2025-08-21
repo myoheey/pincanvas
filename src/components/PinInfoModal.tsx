@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ImageVideoUpload } from './ImageVideoUpload';
+import { CommentSystem } from './CommentSystem';
 
 interface MediaItem {
   id: string;
@@ -33,6 +34,10 @@ interface PinInfoModalProps {
   onDelete: (pinId: string) => void;
   layerColor: string;
   isNewPin?: boolean;
+  canvasOwnerId: string;
+  allowComments: boolean;
+  allowLikes: boolean;
+  isOwner: boolean;
 }
 
 export const PinInfoModal: React.FC<PinInfoModalProps> = ({
@@ -42,7 +47,11 @@ export const PinInfoModal: React.FC<PinInfoModalProps> = ({
   onUpdate,
   onDelete,
   layerColor,
-  isNewPin = false
+  isNewPin = false,
+  canvasOwnerId,
+  allowComments,
+  allowLikes,
+  isOwner,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
@@ -326,6 +335,19 @@ export const PinInfoModal: React.FC<PinInfoModalProps> = ({
                   삭제
                 </Button>
               </div>
+
+              {/* Comments and Likes */}
+              {pin && (allowComments || allowLikes) && (
+                <div className="mt-6 pt-4 border-t">
+                  <CommentSystem
+                    pinId={pin.id}
+                    canvasOwnerId={canvasOwnerId}
+                    allowComments={allowComments}
+                    allowLikes={allowLikes}
+                    isOwner={isOwner}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Share, Copy, Mail, Globe, Lock } from 'lucide-react';
+import { Trash2, Share, Copy, Globe, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,6 +36,7 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
   const [shares, setShares] = useState<ShareData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [publicPermission, setPublicPermission] = useState<'viewer' | 'editor'>('viewer');
   const [isUpdatingPublic, setIsUpdatingPublic] = useState(false);
 
   const shareUrl = `${window.location.origin}/canvas/${canvasId}`;
@@ -51,12 +52,13 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
     try {
       const { data, error } = await supabase
         .from('canvases')
-        .select('is_public')
+        .select('is_public, public_permission')
         .eq('id', canvasId)
         .single();
 
       if (error) throw error;
       setIsPublic(data?.is_public || false);
+      setPublicPermission((data?.public_permission as 'viewer' | 'editor') || 'viewer');
     } catch (error) {
       console.error('Error fetching canvas public status:', error);
     }
@@ -161,11 +163,27 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
     });
   };
 
-  const sendEmail = () => {
-    const subject = `PinCanvas: ${canvasTitle} 공유`;
-    const body = `안녕하세요!\n\n"${canvasTitle}" 캔버스를 공유합니다.\n\n링크: ${shareUrl}\n\n감사합니다.`;
-    const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailtoUrl);
+  const handlePublicPermissionChange = async (permission: 'viewer' | 'editor') => {
+    try {
+      const { error } = await supabase
+        .from('canvases')
+        .update({ public_permission: permission })
+        .eq('id', canvasId);
+
+      if (error) throw error;
+      setPublicPermission(permission);
+      toast({
+        title: "공개 권한 변경됨",
+        description: `공개 권한이 ${permission === 'viewer' ? '뷰어' : '편집자'}로 설정되었습니다.`,
+      });
+    } catch (error) {
+      console.error('Error updating public permission:', error);
+      toast({
+        title: "오류",
+        description: "공개 권한 변경 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePublicToggle = async (checked: boolean) => {
@@ -243,6 +261,23 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
           {isPublic && (
             <div className="space-y-3">
               <Label className="text-sm font-medium">링크로 공유</Label>
+              
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-sm">공개 권한:</Label>
+                <Select
+                  value={publicPermission}
+                  onValueChange={handlePublicPermissionChange}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="viewer">뷰어</SelectItem>
+                    <SelectItem value="editor">편집자</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-center space-x-2">
                 <Input 
                   value={shareUrl} 
@@ -256,14 +291,6 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
                   onClick={copyShareUrl}
                 >
                   <Copy className="w-4 h-4" />
-                </Button>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  onClick={sendEmail}
-                >
-                  <Mail className="w-4 h-4" />
                 </Button>
               </div>
             </div>

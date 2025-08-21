@@ -51,33 +51,80 @@ export type Database = {
       }
       canvases: {
         Row: {
+          allow_comments: boolean
+          allow_likes: boolean
           created_at: string
           id: string
           image_url: string | null
           is_public: boolean
           owner_id: string
+          public_permission: string | null
           title: string
           updated_at: string
         }
         Insert: {
+          allow_comments?: boolean
+          allow_likes?: boolean
           created_at?: string
           id?: string
           image_url?: string | null
           is_public?: boolean
           owner_id: string
+          public_permission?: string | null
           title: string
           updated_at?: string
         }
         Update: {
+          allow_comments?: boolean
+          allow_likes?: boolean
           created_at?: string
           id?: string
           image_url?: string | null
           is_public?: boolean
           owner_id?: string
+          public_permission?: string | null
           title?: string
           updated_at?: string
         }
         Relationships: []
+      }
+      comments: {
+        Row: {
+          author_email: string | null
+          author_name: string
+          content: string
+          created_at: string
+          id: string
+          pin_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_email?: string | null
+          author_name: string
+          content: string
+          created_at?: string
+          id?: string
+          pin_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_email?: string | null
+          author_name?: string
+          content?: string
+          created_at?: string
+          id?: string
+          pin_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_pin_id_fkey"
+            columns: ["pin_id"]
+            isOneToOne: false
+            referencedRelation: "pins"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       layers: {
         Row: {
@@ -110,6 +157,38 @@ export type Database = {
             columns: ["canvas_id"]
             isOneToOne: false
             referencedRelation: "canvases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      likes: {
+        Row: {
+          author_email: string | null
+          author_name: string
+          created_at: string
+          id: string
+          pin_id: string
+        }
+        Insert: {
+          author_email?: string | null
+          author_name: string
+          created_at?: string
+          id?: string
+          pin_id: string
+        }
+        Update: {
+          author_email?: string | null
+          author_name?: string
+          created_at?: string
+          id?: string
+          pin_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "likes_pin_id_fkey"
+            columns: ["pin_id"]
+            isOneToOne: false
+            referencedRelation: "pins"
             referencedColumns: ["id"]
           },
         ]
