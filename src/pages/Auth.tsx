@@ -7,13 +7,16 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
-import { Chrome } from 'lucide-react';
+import { Chrome, ArrowLeft } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Auth = () => {
   const navigate = useNavigate();
   const { signIn, signUp, signInWithGoogle, user, loading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
   
   // Form states
   const [loginEmail, setLoginEmail] = useState('');
@@ -65,6 +68,23 @@ const Auth = () => {
     
     if (error) {
       setError(error.message);
+    }
+    setIsLoading(false);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setError('비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인해주세요.');
     }
     setIsLoading(false);
   };
@@ -144,6 +164,15 @@ const Auth = () => {
                         onChange={(e) => setLoginPassword(e.target.value)}
                         required
                       />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        className="text-sm text-primary hover:underline"
+                        onClick={() => setShowForgotPassword(true)}
+                      >
+                        비밀번호를 잊으셨나요?
+                      </button>
                     </div>
                     <Button 
                       type="submit" 
@@ -247,6 +276,55 @@ const Auth = () => {
               </Card>
             </TabsContent>
           </Tabs>
+
+          {/* Forgot Password Modal */}
+          {showForgotPassword && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <Card className="w-full max-w-md mx-4">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>비밀번호 재설정</CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setShowForgotPassword(false);
+                        setResetEmail('');
+                        setError('');
+                      }}
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <CardDescription>
+                    가입한 이메일 주소를 입력하시면 비밀번호 재설정 링크를 보내드립니다.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="reset-email">이메일</Label>
+                      <Input
+                        id="reset-email"
+                        type="email"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        required
+                        placeholder="your@email.com"
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full gradient-primary" 
+                      disabled={isLoading}
+                    >
+                      {isLoading ? '발송 중...' : '재설정 링크 발송'}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>

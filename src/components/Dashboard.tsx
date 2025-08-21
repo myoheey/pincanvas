@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Grid, LogOut, Share } from 'lucide-react';
+import { Plus, Search, Filter, Grid, LogOut, Share, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CanvasGrid } from './CanvasGrid';
 import { CreateCanvasModal } from './CreateCanvasModal';
 import { ShareCanvasModal } from './ShareCanvasModal';
@@ -17,6 +18,7 @@ interface Canvas {
   image_url: string;
   created_at: string;
   owner_id: string;
+  ownerName?: string;
   pinCount?: number;
   layerCount?: number;
 }
@@ -29,9 +31,11 @@ export const Dashboard: React.FC = () => {
   const [shareModalCanvasId, setShareModalCanvasId] = useState<string | null>(null);
   const [shareModalCanvasTitle, setShareModalCanvasTitle] = useState('');
   const [canvases, setCanvases] = useState<Canvas[]>([]);
+  const [sharedCanvases, setSharedCanvases] = useState<Canvas[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'pins'>('date');
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'owned' | 'shared'>('owned');
 
   // Redirect unauthenticated users
   useEffect(() => {
@@ -43,6 +47,7 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (user) {
       fetchCanvases();
+      fetchSharedCanvases();
     }
   }, [user]);
 
@@ -65,6 +70,54 @@ export const Dashboard: React.FC = () => {
       });
     }
     setIsLoading(false);
+  };
+
+  const fetchSharedCanvases = async () => {
+    try {
+      const { data: shareData, error } = await supabase
+        .from('canvas_shares')
+        .select(`
+          canvas_id,
+          canvases!inner (
+            id,
+            title,
+            image_url,
+            created_at,
+            owner_id
+          )
+        `)
+        .eq('shared_with_email', user?.email);
+
+      if (error) throw error;
+
+      // 각 공유된 캔버스의 소유자 이름을 가져옴
+      const sharedCanvasData = [];
+      for (const share of shareData || []) {
+        const canvas = share.canvases as any;
+        
+        // 소유자 프로필 가져오기
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', canvas.owner_id)
+          .single();
+
+        sharedCanvasData.push({
+          id: canvas.id,
+          title: canvas.title,
+          image_url: canvas.image_url,
+          created_at: canvas.created_at,
+          owner_id: canvas.owner_id,
+          ownerName: profileData?.full_name || '알 수 없는 사용자',
+          pinCount: 0,
+          layerCount: 0,
+        });
+      }
+
+      setSharedCanvases(sharedCanvasData);
+    } catch (error) {
+      console.error('Error fetching shared canvases:', error);
+    }
   };
 
   const handleCreateCanvas = async (formData: any) => {
@@ -165,6 +218,12 @@ export const Dashboard: React.FC = () => {
     canvas.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredSharedCanvases = sharedCanvases.filter(canvas =>
+    canvas.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const currentCanvases = activeTab === 'owned' ? filteredCanvases : filteredSharedCanvases;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50">
       {/* Header */}
@@ -195,6 +254,13 @@ export const Dashboard: React.FC = () => {
               </Button>
               <Button
                 variant="outline"
+                onClick={() => navigate('/profile')}
+              >
+                <User className="w-4 h-4 mr-2" />
+                프로필
+              </Button>
+              <Button
+                variant="outline"
                 onClick={handleSignOut}
               >
                 <LogOut className="w-4 h-4 mr-2" />
@@ -207,40 +273,66 @@ export const Dashboard: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Search and Filters */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="캔버스 검색..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button variant="outline" size="icon">
-              <Filter className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="icon">
-              <Grid className="w-4 h-4" />
-            </Button>
-          </div>
           
           <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="캔버스 검색..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button variant="outline" size="icon">
+                <Filter className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="icon">
+                <Grid className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+        {/* Canvas Tabs and Grid */}
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'owned' | 'shared')}>
+          <div className="flex items-center justify-between mb-6">
+            <TabsList>
+              <TabsTrigger value="owned">
+                내 캔버스 ({filteredCanvases.length})
+              </TabsTrigger>
+              <TabsTrigger value="shared">
+                공유받은 캔버스 ({filteredSharedCanvases.length})
+              </TabsTrigger>
+            </TabsList>
+            
             <p className="text-muted-foreground">
-              총 {filteredCanvases.length}개의 캔버스
+              총 {currentCanvases.length}개의 캔버스
             </p>
           </div>
-        </div>
 
-        {/* Canvas Grid */}
-        <CanvasGrid 
-          searchQuery={searchTerm} 
-          sortBy={sortBy} 
-          canvases={filteredCanvases}
-          onShare={handleShare}
-        />
+          <TabsContent value="owned">
+            <CanvasGrid 
+              searchQuery={searchTerm} 
+              sortBy={sortBy} 
+              canvases={filteredCanvases}
+              onShare={handleShare}
+              showOwner={false}
+              showCreateCard={true}
+            />
+          </TabsContent>
+
+          <TabsContent value="shared">
+            <CanvasGrid 
+              searchQuery={searchTerm} 
+              sortBy={sortBy} 
+              canvases={filteredSharedCanvases}
+              onShare={handleShare}
+              showOwner={true}
+              showCreateCard={false}
+            />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Create Canvas Modal */}

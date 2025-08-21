@@ -38,6 +38,7 @@ interface Canvas {
   image_url: string;
   created_at: string;
   owner_id: string;
+  ownerName?: string;
   pinCount?: number;
   layerCount?: number;
 }
@@ -47,9 +48,18 @@ interface CanvasGridProps {
   sortBy: 'date' | 'name' | 'pins';
   canvases: Canvas[];
   onShare: (canvasId: string, canvasTitle: string) => void;
+  showOwner?: boolean;
+  showCreateCard?: boolean;
 }
 
-export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, canvases, onShare }) => {
+export const CanvasGrid: React.FC<CanvasGridProps> = ({ 
+  searchQuery, 
+  sortBy, 
+  canvases, 
+  onShare, 
+  showOwner = false, 
+  showCreateCard = true 
+}) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -237,16 +247,18 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Create New Canvas Card */}
-        <Card 
-          className="border-2 border-dashed border-gray-300 hover:border-gray-400 cursor-pointer transition-colors group"
-          onClick={() => setIsCreateModalOpen(true)}
-        >
-          <CardContent className="flex flex-col items-center justify-center h-48 text-gray-500 group-hover:text-gray-600">
-            <Plus className="w-12 h-12 mb-4" />
-            <p className="text-lg font-medium">새 캔버스 만들기</p>
-            <p className="text-sm text-center mt-2">이미지를 업로드하거나<br />빈 캔버스를 시작하세요</p>
-          </CardContent>
-        </Card>
+        {showCreateCard && (
+          <Card 
+            className="border-2 border-dashed border-gray-300 hover:border-gray-400 cursor-pointer transition-colors group"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            <CardContent className="flex flex-col items-center justify-center h-48 text-gray-500 group-hover:text-gray-600">
+              <Plus className="w-12 h-12 mb-4" />
+              <p className="text-lg font-medium">새 캔버스 만들기</p>
+              <p className="text-sm text-center mt-2">이미지를 업로드하거나<br />빈 캔버스를 시작하세요</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Existing Canvases */}
         {filteredAndSortedCanvases.map((canvas) => (
@@ -274,18 +286,21 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleCanvasClick(canvas.id)}>
-                          <Edit className="w-4 h-4 mr-2" />
-                          열기
-                        </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCanvasClick(canvas.id)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        열기
+                      </DropdownMenuItem>
+                      {!showOwner && (
                         <DropdownMenuItem onClick={() => handleEditCanvasName(canvas.id, canvas.title)}>
                           <Edit className="w-4 h-4 mr-2" />
                           이름 수정
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onShare(canvas.id, canvas.title)}>
-                          <Share className="w-4 h-4 mr-2" />
-                          공유
-                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => onShare(canvas.id, canvas.title)}>
+                        <Share className="w-4 h-4 mr-2" />
+                        공유
+                      </DropdownMenuItem>
+                      {!showOwner && (
                         <DropdownMenuItem 
                           onClick={() => setDeleteCanvasId(canvas.id)}
                           className="text-red-600 focus:text-red-600"
@@ -293,6 +308,7 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
                           <Trash2 className="w-4 h-4 mr-2" />
                           삭제
                         </DropdownMenuItem>
+                      )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -301,6 +317,11 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
                   <CardTitle className="text-lg">{canvas.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0" onClick={() => handleCanvasClick(canvas.id)}>
+                  {showOwner && canvas.ownerName && (
+                    <div className="text-xs text-muted-foreground mb-2">
+                      {canvas.ownerName}님의 캔버스
+                    </div>
+                  )}
                   <div className="flex items-center justify-between text-sm text-muted-foreground mb-3">
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center space-x-1">
@@ -330,21 +351,25 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
                 <Edit className="w-4 h-4 mr-2" />
                 열기
               </ContextMenuItem>
-              <ContextMenuItem onClick={() => handleEditCanvasName(canvas.id, canvas.title)}>
-                <Edit className="w-4 h-4 mr-2" />
-                이름 수정
-              </ContextMenuItem>
+              {!showOwner && (
+                <ContextMenuItem onClick={() => handleEditCanvasName(canvas.id, canvas.title)}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  이름 수정
+                </ContextMenuItem>
+              )}
               <ContextMenuItem onClick={() => onShare(canvas.id, canvas.title)}>
                 <Share className="w-4 h-4 mr-2" />
                 공유
               </ContextMenuItem>
-              <ContextMenuItem 
-                onClick={() => setDeleteCanvasId(canvas.id)}
-                className="text-red-600 focus:text-red-600"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                삭제
-              </ContextMenuItem>
+              {!showOwner && (
+                <ContextMenuItem 
+                  onClick={() => setDeleteCanvasId(canvas.id)}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  삭제
+                </ContextMenuItem>
+              )}
             </ContextMenuContent>
           </ContextMenu>
         ))}
