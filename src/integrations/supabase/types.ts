@@ -132,6 +132,7 @@ export type Database = {
           color: string
           created_at: string
           id: string
+          locked: boolean
           name: string
           visible: boolean
         }
@@ -140,6 +141,7 @@ export type Database = {
           color: string
           created_at?: string
           id?: string
+          locked?: boolean
           name: string
           visible?: boolean
         }
@@ -148,6 +150,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          locked?: boolean
           name?: string
           visible?: boolean
         }

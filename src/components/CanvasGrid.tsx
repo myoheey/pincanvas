@@ -135,10 +135,21 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
 
   const handleDeleteCanvas = async (canvasId: string) => {
     try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        toast({
+          title: "권한 없음",
+          description: "로그인이 필요합니다.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('canvases')
         .delete()
-        .eq('id', canvasId);
+        .eq('id', canvasId)
+        .eq('owner_id', user.id);
 
       if (error) throw error;
 

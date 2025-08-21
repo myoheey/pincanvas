@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X, Share } from 'lucide-react';
+import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X, Share, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,8 @@ import { PinInfoModal } from '@/components/PinInfoModal';
 import { CreateLayerModal } from '@/components/CreateLayerModal';
 import { ShareCanvasModal } from '@/components/ShareCanvasModal';
 import { CanvasSettingsModal } from '@/components/CanvasSettingsModal';
+import { EditCanvasNameModal } from '@/components/EditCanvasNameModal';
+import { EditLayerNameModal } from '@/components/EditLayerNameModal';
 import ImageIcon from '@/components/ui/icons/ImageIcon';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +33,7 @@ interface Layer {
   name: string;
   color: string;
   visible: boolean;
+  locked: boolean;
   canvasId: string;
 }
 
@@ -67,6 +70,9 @@ const CanvasView = () => {
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isEditCanvasNameModalOpen, setIsEditCanvasNameModalOpen] = useState(false);
+  const [isEditLayerNameModalOpen, setIsEditLayerNameModalOpen] = useState(false);
+  const [editingLayerId, setEditingLayerId] = useState<string>('');
 
   const { toast } = useToast();
 
@@ -116,6 +122,7 @@ const CanvasView = () => {
           name: layer.name,
           color: layer.color,
           visible: layer.visible,
+          locked: layer.locked || false,
           canvasId: layer.canvas_id,
         })) || [];
 
@@ -200,6 +207,16 @@ const CanvasView = () => {
 
   const handleCanvasClick = async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!selectedLayerId) return;
+    
+    const selectedLayer = layers.find(l => l.id === selectedLayerId);
+    if (selectedLayer?.locked) {
+      toast({
+        title: "레이어 잠금됨",
+        description: "잠긴 레이어에는 핀을 추가할 수 없습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -374,6 +391,7 @@ const CanvasView = () => {
         name: data.name,
         color: data.color,
         visible: data.visible,
+        locked: data.locked || false,
         canvasId: data.canvas_id,
       };
 
@@ -455,6 +473,101 @@ const CanvasView = () => {
     }
   };
 
+  const toggleLayerLock = async (layerId: string) => {
+    try {
+      const layer = layers.find(l => l.id === layerId);
+      if (!layer) return;
+
+      const newLockState = !layer.locked;
+
+      const { error } = await supabase
+        .from('layers')
+        .update({ locked: newLockState })
+        .eq('id', layerId);
+
+      if (error) throw error;
+
+      const updatedLayers = layers.map(layer => 
+        layer.id === layerId 
+          ? { ...layer, locked: newLockState }
+          : layer
+      );
+      setLayers(updatedLayers);
+
+      toast({
+        title: newLockState ? "레이어 잠금" : "레이어 잠금 해제",
+        description: newLockState ? "레이어가 잠겼습니다." : "레이어 잠금이 해제되었습니다.",
+      });
+    } catch (error) {
+      console.error('Error updating layer lock:', error);
+      toast({
+        title: "오류",
+        description: "레이어 잠금 설정 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCanvasNameUpdate = async (newName: string) => {
+    try {
+      const { error } = await supabase
+        .from('canvases')
+        .update({ title: newName })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (canvas) {
+        setCanvas({
+          ...canvas,
+          title: newName,
+        });
+      }
+
+      toast({
+        title: "캔버스 이름 수정 완료",
+        description: "캔버스 이름이 변경되었습니다.",
+      });
+    } catch (error) {
+      console.error('Error updating canvas name:', error);
+      toast({
+        title: "오류",
+        description: "캔버스 이름 수정 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLayerNameUpdate = async (newName: string) => {
+    try {
+      const { error } = await supabase
+        .from('layers')
+        .update({ name: newName })
+        .eq('id', editingLayerId);
+
+      if (error) throw error;
+
+      const updatedLayers = layers.map(layer => 
+        layer.id === editingLayerId 
+          ? { ...layer, name: newName }
+          : layer
+      );
+      setLayers(updatedLayers);
+
+      toast({
+        title: "레이어 이름 수정 완료",
+        description: "레이어 이름이 변경되었습니다.",
+      });
+    } catch (error) {
+      console.error('Error updating layer name:', error);
+      toast({
+        title: "오류",
+        description: "레이어 이름 수정 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const isOwner = canvas && user?.id === canvas.ownerId;
 
   return (
@@ -464,7 +577,7 @@ const CanvasView = () => {
         <header className="bg-white/80 backdrop-blur-sm border-b border-border/50 sticky top-0 z-10">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
+                 <div className="flex items-center space-x-4">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -473,7 +586,19 @@ const CanvasView = () => {
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
                 <div>
-                  <h1 className="text-xl font-bold">{canvas.title}</h1>
+                  <div className="flex items-center space-x-2">
+                    <h1 className="text-xl font-bold">{canvas.title}</h1>
+                    {isOwner && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-6 h-6"
+                        onClick={() => setIsEditCanvasNameModalOpen(true)}
+                      >
+                        <Edit className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     {pins.length}개의 핀 • {layers.length}개의 레이어
                   </p>
@@ -551,10 +676,42 @@ const CanvasView = () => {
                             className="w-4 h-4 rounded-full border-2"
                             style={{ backgroundColor: layer.color }}
                           />
-                          <span className="font-medium">{layer.name}</span>
+                          <span className="font-medium flex-1">{layer.name}</span>
+                          {layer.locked && <Lock className="w-3 h-3 text-muted-foreground" />}
                         </div>
                         
                         <div className="flex items-center space-x-2">
+                          {isOwner && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="w-8 h-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingLayerId(layer.id);
+                                setIsEditLayerNameModalOpen(true);
+                              }}
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                          )}
+                          {isOwner && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="w-8 h-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleLayerLock(layer.id);
+                              }}
+                            >
+                              {layer.locked ? (
+                                <Lock className="w-4 h-4" />
+                              ) : (
+                                <Unlock className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -570,17 +727,19 @@ const CanvasView = () => {
                               <EyeOff className="w-4 h-4" />
                             )}
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="w-8 h-8 text-red-500 hover:text-red-700"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteLayer(layer.id);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {isOwner && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="w-8 h-8 text-red-500 hover:text-red-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteLayer(layer.id);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                       
@@ -756,6 +915,24 @@ const CanvasView = () => {
         onClose={() => setIsShareModalOpen(false)}
         canvasId={id || ''}
         canvasTitle={canvas?.title || ''}
+      />
+
+      {/* Edit Canvas Name Modal */}
+      {canvas && (
+        <EditCanvasNameModal
+          isOpen={isEditCanvasNameModalOpen}
+          onClose={() => setIsEditCanvasNameModalOpen(false)}
+          currentName={canvas.title}
+          onSubmit={handleCanvasNameUpdate}
+        />
+      )}
+
+      {/* Edit Layer Name Modal */}
+      <EditLayerNameModal
+        isOpen={isEditLayerNameModalOpen}
+        onClose={() => setIsEditLayerNameModalOpen(false)}
+        currentName={layers.find(l => l.id === editingLayerId)?.name || ''}
+        onSubmit={handleLayerNameUpdate}
       />
     </div>
   );
