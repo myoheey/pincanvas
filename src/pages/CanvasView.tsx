@@ -78,7 +78,7 @@ const CanvasView = () => {
         .from('canvases')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (canvasError) throw canvasError;
 
