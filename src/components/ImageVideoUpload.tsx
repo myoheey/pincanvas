@@ -164,7 +164,7 @@ export const ImageVideoUpload: React.FC<ImageVideoUploadProps> = ({
       {isAddingUrl && (
         <div className="flex space-x-2">
           <Input
-            placeholder="이미지/동영상 URL을 입력하세요"
+            placeholder="이미지, 동영상 또는 연결하고 싶은 링크를 입력하세요"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleUrlAdd()}

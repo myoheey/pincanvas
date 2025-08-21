@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Share, Copy, Mail } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Trash2, Share, Copy, Mail, Globe, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -34,14 +35,32 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
   const [permission, setPermission] = useState<'viewer' | 'editor'>('viewer');
   const [shares, setShares] = useState<ShareData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [isUpdatingPublic, setIsUpdatingPublic] = useState(false);
 
   const shareUrl = `${window.location.origin}/canvas/${canvasId}`;
 
   useEffect(() => {
     if (isOpen) {
       fetchShares();
+      fetchCanvasPublicStatus();
     }
   }, [isOpen, canvasId]);
+
+  const fetchCanvasPublicStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('canvases')
+        .select('is_public')
+        .eq('id', canvasId)
+        .single();
+
+      if (error) throw error;
+      setIsPublic(data?.is_public || false);
+    } catch (error) {
+      console.error('Error fetching canvas public status:', error);
+    }
+  };
 
   const fetchShares = async () => {
     try {
@@ -149,6 +168,34 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
     window.open(mailtoUrl);
   };
 
+  const handlePublicToggle = async (checked: boolean) => {
+    setIsUpdatingPublic(true);
+    try {
+      const { error } = await supabase
+        .from('canvases')
+        .update({ is_public: checked })
+        .eq('id', canvasId);
+
+      if (error) throw error;
+
+      setIsPublic(checked);
+      toast({
+        title: checked ? "캔버스 공개됨" : "캔버스 비공개됨",
+        description: checked 
+          ? "이제 누구나 링크로 캔버스에 접근할 수 있습니다."
+          : "캔버스가 비공개로 설정되었습니다.",
+      });
+    } catch (error) {
+      console.error('Error updating canvas public status:', error);
+      toast({
+        title: "오류",
+        description: "공개 설정 변경 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+    setIsUpdatingPublic(false);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
@@ -163,33 +210,64 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Share via link */}
+          {/* Public/Private Toggle */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium">링크로 공유</Label>
-            <div className="flex items-center space-x-2">
-              <Input 
-                value={shareUrl} 
-                readOnly 
-                className="flex-1 text-sm"
+            <Label className="text-sm font-medium">공개 설정</Label>
+            <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+              <div className="flex items-center space-x-3">
+                {isPublic ? (
+                  <Globe className="w-5 h-5 text-green-600" />
+                ) : (
+                  <Lock className="w-5 h-5 text-gray-600" />
+                )}
+                <div>
+                  <p className="text-sm font-medium">
+                    {isPublic ? "공개 캔버스" : "비공개 캔버스"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {isPublic 
+                      ? "링크를 아는 누구나 접근할 수 있습니다" 
+                      : "초대받은 사용자만 접근할 수 있습니다"}
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={isPublic}
+                onCheckedChange={handlePublicToggle}
+                disabled={isUpdatingPublic}
               />
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                onClick={copyShareUrl}
-              >
-                <Copy className="w-4 h-4" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                onClick={sendEmail}
-              >
-                <Mail className="w-4 h-4" />
-              </Button>
             </div>
           </div>
+
+          {/* Share via link - Only show when public */}
+          {isPublic && (
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">링크로 공유</Label>
+              <div className="flex items-center space-x-2">
+                <Input 
+                  value={shareUrl} 
+                  readOnly 
+                  className="flex-1 text-sm"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  onClick={copyShareUrl}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  onClick={sendEmail}
+                >
+                  <Mail className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Share via email */}
           <div className="space-y-3">
