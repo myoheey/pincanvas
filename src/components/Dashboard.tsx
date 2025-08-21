@@ -100,15 +100,21 @@ export const Dashboard: React.FC = () => {
 
       if (error) throw error;
 
-      // Create default layers only
+      // Create default layer only (no pins)
       if (data) {
-        await supabase.from('layers').insert([
+        const { error: layerError } = await supabase.from('layers').insert([
           {
             name: '제목없는 레이어',
             color: '#3b82f6',
-            canvas_id: data.id
+            canvas_id: data.id,
+            visible: true
           }
         ]);
+
+        if (layerError) {
+          console.error('Error creating default layer:', layerError);
+          throw layerError;
+        }
 
         toast({
           title: "캔버스 생성 완료",

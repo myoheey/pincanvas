@@ -71,6 +71,8 @@ const CanvasView = () => {
 
   const fetchCanvasData = async () => {
     try {
+      console.log('Fetching canvas data for ID:', id);
+      
       // 캔버스 데이터 가져오기
       const { data: canvasData, error: canvasError } = await supabase
         .from('canvases')
@@ -99,14 +101,15 @@ const CanvasView = () => {
 
         if (layersError) throw layersError;
 
-        const formattedLayers: Layer[] = layersData.map(layer => ({
+        const formattedLayers: Layer[] = layersData?.map(layer => ({
           id: layer.id,
           name: layer.name,
           color: layer.color,
           visible: layer.visible,
           canvasId: layer.canvas_id,
-        }));
+        })) || [];
 
+        console.log('Formatted layers:', formattedLayers);
         setLayers(formattedLayers);
         setSelectedLayerId(formattedLayers[0]?.id || '');
 
@@ -121,7 +124,7 @@ const CanvasView = () => {
 
         if (pinsError) throw pinsError;
 
-        const formattedPins: PinData[] = pinsData.map(pin => ({
+        const formattedPins: PinData[] = pinsData?.map(pin => ({
           id: pin.id,
           x: pin.x,
           y: pin.y,
@@ -135,8 +138,9 @@ const CanvasView = () => {
             url: media.url,
             name: media.name,
           })) || [],
-        }));
+        })) || [];
 
+        console.log('Formatted pins:', formattedPins);
         setPins(formattedPins);
       }
     } catch (error) {
