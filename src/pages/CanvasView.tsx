@@ -9,6 +9,8 @@ import { PinInfoModal } from '@/components/PinInfoModal';
 import { CreateLayerModal } from '@/components/CreateLayerModal';
 import { ShareCanvasModal } from '@/components/ShareCanvasModal';
 import ImageIcon from '@/components/ui/icons/ImageIcon';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface Canvas {
   id: string;
@@ -59,61 +61,93 @@ const CanvasView = () => {
   const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
+  const { toast } = useToast();
+
   useEffect(() => {
-    // 로컬 스토리지에서 캔버스 데이터 가져오기
-    const savedCanvases = localStorage.getItem('pincanvas_canvases');
-    let canvasData: Canvas | null = null;
-    
-    if (savedCanvases) {
-      const canvases = JSON.parse(savedCanvases);
-      canvasData = canvases.find((c: Canvas) => c.id === id) || null;
+    if (id) {
+      fetchCanvasData();
     }
-    
-    // 캔버스가 없으면 기본 데이터 대신 빈 상태로 유지
-    if (!canvasData) {
-      canvasData = {
-        id: id || '1',
-        title: '새 캔버스',
-        imageUrl: '/placeholder.svg',
-        createdAt: new Date(),
-        pinCount: 0,
-        layerCount: 1,
-      };
-    }
-
-    // 레이어와 핀 데이터 로드
-    const savedLayers = localStorage.getItem(`pincanvas_layers_${id}`);
-    const savedPins = localStorage.getItem(`pincanvas_pins_${id}`);
-
-    let layersData: Layer[] = [];
-    let pinsData: PinData[] = [];
-
-    if (savedLayers) {
-      layersData = JSON.parse(savedLayers);
-    } else {
-      // 기본 레이어 하나만 생성 (제목없는 레이어)
-      layersData = [
-        {
-          id: 'layer1',
-          name: '제목없는 레이어',
-          color: '#3b82f6',
-          visible: true,
-          canvasId: id || '1',
-        },
-      ];
-      localStorage.setItem(`pincanvas_layers_${id}`, JSON.stringify(layersData));
-    }
-
-    if (savedPins) {
-      pinsData = JSON.parse(savedPins);
-    }
-    // 기본 핀은 생성하지 않음
-
-    setCanvas(canvasData);
-    setLayers(layersData);
-    setPins(pinsData);
-    setSelectedLayerId(layersData[0]?.id || '');
   }, [id]);
+
+  const fetchCanvasData = async () => {
+    try {
+      // 캔버스 데이터 가져오기
+      const { data: canvasData, error: canvasError } = await supabase
+        .from('canvases')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (canvasError) throw canvasError;
+
+      if (canvasData) {
+        setCanvas({
+          id: canvasData.id,
+          title: canvasData.title,
+          imageUrl: canvasData.image_url || '/placeholder.svg',
+          createdAt: new Date(canvasData.created_at),
+          pinCount: 0,
+          layerCount: 0,
+        });
+
+        // 레이어 데이터 가져오기
+        const { data: layersData, error: layersError } = await supabase
+          .from('layers')
+          .select('*')
+          .eq('canvas_id', id)
+          .order('created_at', { ascending: true });
+
+        if (layersError) throw layersError;
+
+        const formattedLayers: Layer[] = layersData.map(layer => ({
+          id: layer.id,
+          name: layer.name,
+          color: layer.color,
+          visible: layer.visible,
+          canvasId: layer.canvas_id,
+        }));
+
+        setLayers(formattedLayers);
+        setSelectedLayerId(formattedLayers[0]?.id || '');
+
+        // 핀 데이터 가져오기
+        const { data: pinsData, error: pinsError } = await supabase
+          .from('pins')
+          .select(`
+            *,
+            media_items (*)
+          `)
+          .eq('canvas_id', id);
+
+        if (pinsError) throw pinsError;
+
+        const formattedPins: PinData[] = pinsData.map(pin => ({
+          id: pin.id,
+          x: pin.x,
+          y: pin.y,
+          title: pin.title,
+          description: pin.description || '',
+          layerId: pin.layer_id,
+          canvasId: pin.canvas_id,
+          mediaItems: pin.media_items?.map((media: any) => ({
+            id: media.id,
+            type: media.type,
+            url: media.url,
+            name: media.name,
+          })) || [],
+        }));
+
+        setPins(formattedPins);
+      }
+    } catch (error) {
+      console.error('Error fetching canvas data:', error);
+      toast({
+        title: "오류",
+        description: "캔버스 데이터를 불러올 수 없습니다.",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -129,12 +163,28 @@ const CanvasView = () => {
     };
   }, [isPresentationMode]);
 
-  const saveData = () => {
-    localStorage.setItem(`pincanvas_layers_${id}`, JSON.stringify(layers));
-    localStorage.setItem(`pincanvas_pins_${id}`, JSON.stringify(pins));
+  const getVisiblePins = () => {
+    const visibleLayerIds = layers.filter(layer => layer.visible).map(layer => layer.id);
+    return pins.filter(pin => visibleLayerIds.includes(pin.layerId));
   };
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const getLayerColor = (layerId: string) => {
+    const layer = layers.find(l => l.id === layerId);
+    return layer?.color || '#6b7280';
+  };
+
+  if (!canvas) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-muted-foreground">캔버스를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleCanvasClick = async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!selectedLayerId) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -164,25 +214,95 @@ const CanvasView = () => {
     setIsPinModalOpen(true);
   };
 
-  const handlePinUpdate = (updatedPin: PinData) => {
-    if (isCreatingNewPin) {
-      // 새 핀을 추가
-      const updatedPins = [...pins, updatedPin];
-      setPins(updatedPins);
-      localStorage.setItem(`pincanvas_pins_${id}`, JSON.stringify(updatedPins));
-      setIsCreatingNewPin(false);
-    } else {
-      // 기존 핀을 업데이트
-      const updatedPins = pins.map(pin => pin.id === updatedPin.id ? updatedPin : pin);
-      setPins(updatedPins);
-      localStorage.setItem(`pincanvas_pins_${id}`, JSON.stringify(updatedPins));
+  const handlePinUpdate = async (updatedPin: PinData) => {
+    try {
+      if (isCreatingNewPin) {
+        // 새 핀을 데이터베이스에 추가
+        const { data, error } = await supabase
+          .from('pins')
+          .insert({
+            x: updatedPin.x,
+            y: updatedPin.y,
+            title: updatedPin.title,
+            description: updatedPin.description,
+            layer_id: updatedPin.layerId,
+            canvas_id: updatedPin.canvasId
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        const newPin: PinData = {
+          ...updatedPin,
+          id: data.id
+        };
+
+        const updatedPins = [...pins, newPin];
+        setPins(updatedPins);
+        setIsCreatingNewPin(false);
+
+        toast({
+          title: "핀 생성 완료",
+          description: "새 핀이 생성되었습니다.",
+        });
+      } else {
+        // 기존 핀을 데이터베이스에서 업데이트
+        const { error } = await supabase
+          .from('pins')
+          .update({
+            x: updatedPin.x,
+            y: updatedPin.y,
+            title: updatedPin.title,
+            description: updatedPin.description,
+            layer_id: updatedPin.layerId
+          })
+          .eq('id', updatedPin.id);
+
+        if (error) throw error;
+
+        const updatedPins = pins.map(pin => pin.id === updatedPin.id ? updatedPin : pin);
+        setPins(updatedPins);
+
+        toast({
+          title: "핀 수정 완료",
+          description: "핀이 수정되었습니다.",
+        });
+      }
+    } catch (error) {
+      console.error('Error updating pin:', error);
+      toast({
+        title: "오류",
+        description: "핀 저장 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
     }
   };
 
-  const handlePinDelete = (pinId: string) => {
-    const updatedPins = pins.filter(pin => pin.id !== pinId);
-    setPins(updatedPins);
-    localStorage.setItem(`pincanvas_pins_${id}`, JSON.stringify(updatedPins));
+  const handlePinDelete = async (pinId: string) => {
+    try {
+      const { error } = await supabase
+        .from('pins')
+        .delete()
+        .eq('id', pinId);
+
+      if (error) throw error;
+
+      const updatedPins = pins.filter(pin => pin.id !== pinId);
+      setPins(updatedPins);
+
+      toast({
+        title: "핀 삭제 완료",
+        description: "핀이 삭제되었습니다.",
+      });
+    } catch (error) {
+      console.error('Error deleting pin:', error);
+      toast({
+        title: "오류",
+        description: "핀 삭제 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePinModalClose = () => {
@@ -191,65 +311,125 @@ const CanvasView = () => {
     setSelectedPin(null);
   };
 
-  const toggleLayerVisibility = (layerId: string) => {
-    const updatedLayers = layers.map(layer => 
-      layer.id === layerId 
-        ? { ...layer, visible: !layer.visible }
-        : layer
-    );
-    setLayers(updatedLayers);
-    localStorage.setItem(`pincanvas_layers_${id}`, JSON.stringify(updatedLayers));
+  const toggleLayerVisibility = async (layerId: string) => {
+    try {
+      const layer = layers.find(l => l.id === layerId);
+      if (!layer) return;
+
+      const newVisibility = !layer.visible;
+
+      const { error } = await supabase
+        .from('layers')
+        .update({ visible: newVisibility })
+        .eq('id', layerId);
+
+      if (error) throw error;
+
+      const updatedLayers = layers.map(layer => 
+        layer.id === layerId 
+          ? { ...layer, visible: newVisibility }
+          : layer
+      );
+      setLayers(updatedLayers);
+    } catch (error) {
+      console.error('Error updating layer visibility:', error);
+      toast({
+        title: "오류",
+        description: "레이어 표시/숨김 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleCreateLayer = (layerData: { name: string; color: string }) => {
-    const newLayer: Layer = {
-      id: `layer${Date.now()}`,
-      name: layerData.name,
-      color: layerData.color,
-      visible: true,
-      canvasId: id || '1',
-    };
+  const handleCreateLayer = async (layerData: { name: string; color: string }) => {
+    try {
+      const { data, error } = await supabase
+        .from('layers')
+        .insert({
+          name: layerData.name,
+          color: layerData.color,
+          canvas_id: id
+        })
+        .select()
+        .single();
 
-    const updatedLayers = [...layers, newLayer];
-    setLayers(updatedLayers);
-    localStorage.setItem(`pincanvas_layers_${id}`, JSON.stringify(updatedLayers));
+      if (error) throw error;
+
+      const newLayer: Layer = {
+        id: data.id,
+        name: data.name,
+        color: data.color,
+        visible: data.visible,
+        canvasId: data.canvas_id,
+      };
+
+      const updatedLayers = [...layers, newLayer];
+      setLayers(updatedLayers);
+
+      toast({
+        title: "레이어 생성 완료",
+        description: "새 레이어가 생성되었습니다.",
+      });
+    } catch (error) {
+      console.error('Error creating layer:', error);
+      toast({
+        title: "오류",
+        description: "레이어 생성 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteLayer = (layerId: string) => {
+  const handleDeleteLayer = async (layerId: string) => {
     if (layers.length <= 1) {
-      alert('최소 하나의 레이어는 필요합니다.');
+      toast({
+        title: "삭제 불가",
+        description: "최소 하나의 레이어는 필요합니다.",
+        variant: "destructive",
+      });
       return;
     }
 
     if (confirm('이 레이어와 모든 핀을 삭제하시겠습니까?')) {
-      const updatedLayers = layers.filter(layer => layer.id !== layerId);
-      const updatedPins = pins.filter(pin => pin.layerId !== layerId);
-      
-      setLayers(updatedLayers);
-      setPins(updatedPins);
-      
-      localStorage.setItem(`pincanvas_layers_${id}`, JSON.stringify(updatedLayers));
-      localStorage.setItem(`pincanvas_pins_${id}`, JSON.stringify(updatedPins));
-      
-      if (selectedLayerId === layerId) {
-        setSelectedLayerId(updatedLayers[0]?.id || '');
+      try {
+        // 레이어에 속한 핀들 먼저 삭제
+        await supabase
+          .from('pins')
+          .delete()
+          .eq('layer_id', layerId);
+
+        // 레이어 삭제
+        const { error } = await supabase
+          .from('layers')
+          .delete()
+          .eq('id', layerId);
+
+        if (error) throw error;
+
+        const updatedLayers = layers.filter(layer => layer.id !== layerId);
+        const updatedPins = pins.filter(pin => pin.layerId !== layerId);
+        
+        setLayers(updatedLayers);
+        setPins(updatedPins);
+        
+        if (selectedLayerId === layerId) {
+          setSelectedLayerId(updatedLayers[0]?.id || '');
+        }
+
+        toast({
+          title: "레이어 삭제 완료",
+          description: "레이어와 관련 핀들이 삭제되었습니다.",
+        });
+      } catch (error) {
+        console.error('Error deleting layer:', error);
+        toast({
+          title: "오류",
+          description: "레이어 삭제 중 오류가 발생했습니다.",
+          variant: "destructive",
+        });
       }
     }
   };
-
-  const getVisiblePins = () => {
-    const visibleLayerIds = layers.filter(layer => layer.visible).map(layer => layer.id);
-    return pins.filter(pin => visibleLayerIds.includes(pin.layerId));
-  };
-
-  const getLayerColor = (layerId: string) => {
-    const layer = layers.find(l => l.id === layerId);
-    return layer?.color || '#6b7280';
-  };
-
-  if (!canvas) {
-    return <div>캔버스를 찾을 수 없습니다.</div>;
-  }
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 ${isPresentationMode ? 'p-0' : ''}`}>
