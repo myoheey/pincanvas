@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CreateCanvasModal } from './CreateCanvasModal';
+import { EditCanvasNameModal } from './EditCanvasNameModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -53,6 +54,8 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
   const { toast } = useToast();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [deleteCanvasId, setDeleteCanvasId] = useState<string | null>(null);
+  const [editCanvasId, setEditCanvasId] = useState<string | null>(null);
+  const [editCanvasName, setEditCanvasName] = useState('');
 
   const filteredAndSortedCanvases = canvases
     .filter(canvas => 
@@ -171,6 +174,53 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
     setDeleteCanvasId(null);
   };
 
+  const handleEditCanvasName = (canvasId: string, currentName: string) => {
+    setEditCanvasId(canvasId);
+    setEditCanvasName(currentName);
+  };
+
+  const handleCanvasNameUpdate = async (newName: string) => {
+    if (!editCanvasId) return;
+
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        toast({
+          title: "권한 없음",
+          description: "로그인이 필요합니다.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('canvases')
+        .update({ title: newName })
+        .eq('id', editCanvasId)
+        .eq('owner_id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "캔버스 이름 수정 완료",
+        description: "캔버스 이름이 변경되었습니다.",
+      });
+
+      // Refresh the parent component
+      window.location.reload();
+    } catch (error) {
+      console.error('Error updating canvas name:', error);
+      toast({
+        title: "수정 실패",
+        description: "캔버스 이름 수정 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+    
+    setEditCanvasId(null);
+    setEditCanvasName('');
+  };
+
   const handleCanvasClick = (canvasId: string) => {
     navigate(`/canvas/${canvasId}`);
   };
@@ -228,6 +278,10 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
                           <Edit className="w-4 h-4 mr-2" />
                           열기
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleEditCanvasName(canvas.id, canvas.title)}>
+                          <Edit className="w-4 h-4 mr-2" />
+                          이름 수정
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onShare(canvas.id, canvas.title)}>
                           <Share className="w-4 h-4 mr-2" />
                           공유
@@ -276,6 +330,10 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
                 <Edit className="w-4 h-4 mr-2" />
                 열기
               </ContextMenuItem>
+              <ContextMenuItem onClick={() => handleEditCanvasName(canvas.id, canvas.title)}>
+                <Edit className="w-4 h-4 mr-2" />
+                이름 수정
+              </ContextMenuItem>
               <ContextMenuItem onClick={() => onShare(canvas.id, canvas.title)}>
                 <Share className="w-4 h-4 mr-2" />
                 공유
@@ -297,6 +355,17 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({ searchQuery, sortBy, can
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateCanvas}
+      />
+
+      {/* Edit Canvas Name Modal */}
+      <EditCanvasNameModal
+        isOpen={!!editCanvasId}
+        onClose={() => {
+          setEditCanvasId(null);
+          setEditCanvasName('');
+        }}
+        currentName={editCanvasName}
+        onSubmit={handleCanvasNameUpdate}
       />
 
       {/* Delete Confirmation Dialog */}
