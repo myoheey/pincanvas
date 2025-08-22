@@ -19,7 +19,6 @@ interface DrawingCanvasProps {
   layerId: string;
   width: number;
   height: number;
-  isVisible: boolean;
   onDrawingChange?: (hasDrawing: boolean) => void;
 }
 
@@ -33,7 +32,6 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   layerId,
   width,
   height,
-  isVisible,
   onDrawingChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -143,45 +141,52 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
+    console.log('Setting drawing mode:', tool);
     canvas.isDrawingMode = tool === 'draw' || tool === 'erase';
     
     if (canvas.freeDrawingBrush) {
       canvas.freeDrawingBrush.width = brushSize;
       
       if (tool === 'erase') {
-        // Configure eraser
-        canvas.freeDrawingBrush.color = 'rgba(0,0,0,1)';
-        // Set the context to erase mode
-        const originalOnMouseDown = canvas.freeDrawingBrush.onMouseDown;
-        const originalOnMouseMove = canvas.freeDrawingBrush.onMouseMove;
-        const originalOnMouseUp = canvas.freeDrawingBrush.onMouseUp;
+        console.log('Configuring eraser mode');
+        // Create a new eraser path that removes existing objects
+        canvas.freeDrawingBrush.color = 'rgba(255,255,255,1)';
         
-        canvas.freeDrawingBrush.onMouseDown = function(pointer) {
-          const ctx = canvas.getContext();
+        // Override the brush methods to use destination-out for erasing
+        const brush = canvas.freeDrawingBrush as any;
+        brush._setBrushStyles = function(ctx: CanvasRenderingContext2D) {
           ctx.globalCompositeOperation = 'destination-out';
-          return originalOnMouseDown?.call(this, pointer);
+          ctx.strokeStyle = 'rgba(0,0,0,1)';
+          ctx.lineWidth = this.width;
+          ctx.lineCap = this.strokeLineCap;
+          ctx.lineJoin = this.strokeLineJoin;
+          ctx.miterLimit = this.strokeMiterLimit;
         };
-        
-        canvas.freeDrawingBrush.onMouseMove = function(pointer) {
-          const ctx = canvas.getContext();
-          ctx.globalCompositeOperation = 'destination-out';
-          return originalOnMouseMove?.call(this, pointer);
-        };
-        
-        canvas.freeDrawingBrush.onMouseUp = function() {
-          const ctx = canvas.getContext();
-          ctx.globalCompositeOperation = 'source-over';
-          return originalOnMouseUp?.call(this);
-        };
-      } else {
+      } else if (tool === 'draw') {
+        console.log('Configuring drawing mode');
         canvas.freeDrawingBrush.color = brushColor;
-        // Reset to normal drawing mode
-        const ctx = canvas.getContext();
-        ctx.globalCompositeOperation = 'source-over';
         
-        // Configure line style for drawing
+        // Reset brush styles for normal drawing
+        const brush = canvas.freeDrawingBrush as any;
+        brush._setBrushStyles = function(ctx: CanvasRenderingContext2D) {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = this.color;
+          ctx.lineWidth = this.width;
+          ctx.lineCap = this.strokeLineCap;
+          ctx.lineJoin = this.strokeLineJoin;
+          ctx.miterLimit = this.strokeMiterLimit;
+          
+          // Configure line style for drawing
+          if (this.strokeDashArray && this.strokeDashArray.length) {
+            ctx.setLineDash(this.strokeDashArray);
+          } else {
+            ctx.setLineDash([]);
+          }
+        };
+        
+        // Configure line style
         const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
-        (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
+        brush.strokeDashArray = dashArray;
       }
     }
 
@@ -256,123 +261,6 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         className="absolute inset-0 pointer-events-auto"
         style={{ zIndex: 10 }}
       />
-      
-      {/* Drawing Toolbar - only show when visible */}
-      {isVisible && (
-        <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-4 space-y-4 pointer-events-auto" style={{ zIndex: 20 }}>
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium text-sm">드로잉 도구</h3>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant={tool === 'select' ? 'default' : 'outline'}
-              onClick={() => setTool('select')}
-            >
-              <MousePointer className="w-4 h-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant={tool === 'draw' ? 'default' : 'outline'}
-              onClick={() => setTool('draw')}
-            >
-              <Pen className="w-4 h-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant={tool === 'erase' ? 'default' : 'outline'}
-              onClick={() => setTool('erase')}
-            >
-              <Eraser className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {(tool === 'draw' || tool === 'erase') && (
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-700">브러시 크기</label>
-              <Slider
-                value={[brushSize]}
-                onValueChange={(value) => setBrushSize(value[0])}
-                max={20}
-                min={1}
-                step={1}
-                className="w-32"
-              />
-            </div>
-          )}
-
-          {tool === 'draw' && (
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-700">색상</label>
-              <div className="grid grid-cols-5 gap-1">
-                {colors.map((color) => (
-                  <button
-                    key={color}
-                    className={`w-6 h-6 rounded border-2 ${
-                      brushColor === color ? 'border-gray-800' : 'border-gray-300'
-                    }`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setBrushColor(color)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {tool === 'draw' && (
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-700">선 종류</label>
-              <div className="flex space-x-1">
-                {[
-                  { key: 'solid', label: '실선' },
-                  { key: 'dashed', label: '점선' },
-                  { key: 'dotted', label: '점선2' }
-                ].map((style) => (
-                  <Button
-                    key={style.key}
-                    size="sm"
-                    variant={lineStyle === style.key ? 'default' : 'outline'}
-                    onClick={() => setLineStyle(style.key as 'solid' | 'dashed' | 'dotted')}
-                    className="text-xs px-2 py-1"
-                  >
-                    {style.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={undo}
-              disabled={undoStack.length === 0}
-            >
-              <Undo className="w-4 h-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={redo}
-              disabled={redoStack.length === 0}
-            >
-              <Redo className="w-4 h-4" />
-            </Button>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={clearCanvas}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

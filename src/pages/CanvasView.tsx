@@ -13,6 +13,7 @@ import { EditCanvasNameModal } from '@/components/EditCanvasNameModal';
 import { EditLayerNameModal } from '@/components/EditLayerNameModal';
 import { PinTemplateSelector } from '@/components/PinTemplateSelector';
 import { DrawingCanvas } from '@/components/DrawingCanvas';
+import { DrawingToolbar } from '@/components/DrawingToolbar';
 import { PinRenderer } from '@/components/PinRenderer';
 import { CanvasExporter } from '@/components/CanvasExporter';
 import CanvasBackgroundSelector from '@/components/CanvasBackgroundSelector';
@@ -84,6 +85,7 @@ const CanvasView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   const [layers, setLayers] = useState<Layer[]>([]);
   const [pins, setPins] = useState<PinData[]>([]);
@@ -104,8 +106,20 @@ const CanvasView = () => {
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [canvasWidth, setCanvasWidth] = useState(800);
   const [canvasHeight, setCanvasHeight] = useState(600);
-
-  const { toast } = useToast();
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
+  
+  // Drawing states
+  const [drawingTool, setDrawingTool] = useState<'select' | 'draw' | 'erase'>('select');
+  const [brushSize, setBrushSize] = useState(2);
+  const [brushColor, setBrushColor] = useState('#000000');
+  const [lineStyle, setLineStyle] = useState<'solid' | 'dashed' | 'dotted'>('solid');
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+  
+  // Drawing functions (placeholder - will be connected to actual canvas)
+  const undo = () => console.log('Undo');
+  const redo = () => console.log('Redo');
+  const clearCanvas = () => console.log('Clear canvas');
 
   useEffect(() => {
     if (id) {
@@ -1030,17 +1044,42 @@ const CanvasView = () => {
               />
             ))}
 
-            {/* Drawing Canvas - only show in drawing mode or if canvas has drawings */}
+            {/* Drawing Canvas - always visible */}
             {selectedLayerId && (
               <DrawingCanvas
                 canvasId={id || ''}
                 layerId={selectedLayerId}
                 width={canvasWidth}
                 height={canvasHeight}
-                isVisible={isDrawingMode}
                 onDrawingChange={(hasDrawing) => {
-                  // Handle drawing state change if needed
+                  setLayers(prev => 
+                    prev.map(l => 
+                      l.id === selectedLayerId 
+                        ? { ...l, has_drawing: hasDrawing }
+                        : l
+                    )
+                  );
                 }}
+              />
+            )}
+            
+            {/* Drawing Toolbar - positioned outside canvas */}
+            {isDrawingMode && (
+              <DrawingToolbar
+                tool={drawingTool}
+                setTool={setDrawingTool}
+                brushSize={brushSize}
+                setBrushSize={setBrushSize}
+                brushColor={brushColor}
+                setBrushColor={setBrushColor}
+                lineStyle={lineStyle}
+                setLineStyle={setLineStyle}
+                undoStack={undoStack}
+                redoStack={redoStack}
+                undo={undo}
+                redo={redo}
+                clearCanvas={clearCanvas}
+                isVisible={true}
               />
             )}
           </div>
