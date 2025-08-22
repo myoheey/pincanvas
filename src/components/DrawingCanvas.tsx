@@ -165,33 +165,14 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     
     if (tool === 'erase') {
       console.log('Configuring eraser mode');
-      // For erasing, create a fresh brush with transparent color during drawing
+      // For erasing, use normal drawing but handle the path in path:created event
       canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
-      canvas.freeDrawingBrush.color = 'rgba(0,0,0,0)'; // Transparent during drawing
-      
-      // Override the _finalizeAndAddPath method to make it erase
-      const brush = canvas.freeDrawingBrush as any;
-      const originalFinalize = brush._finalizeAndAddPath;
-      
-      brush._finalizeAndAddPath = function() {
-        // Get the path that was just drawn
-        const path = originalFinalize.call(this);
-        if (path) {
-          // Set the path to use destination-out composite operation for erasing
-          path.globalCompositeOperation = 'destination-out';
-          path.set({
-            stroke: 'rgba(0,0,0,1)', // Use opaque black for actual erasing
-            fill: 'rgba(0,0,0,1)'
-          });
-          canvas.renderAll();
-        }
-        return path;
-      };
+      canvas.freeDrawingBrush.color = brushColor; // Use visible color for feedback
       
     } else if (tool === 'draw') {
       console.log('Configuring drawing mode with color:', brushColor);
-      // Create fresh brush for normal drawing - reset any previous overrides
+      // Create fresh brush for normal drawing
       canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
       canvas.freeDrawingBrush.color = brushColor;
@@ -201,6 +182,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       if (dashArray.length > 0) {
         (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
       }
+      
     } else {
       // Select mode - disable drawing but enable selection
       canvas.isDrawingMode = false;
@@ -220,21 +202,39 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     });
   }, [tool, brushColor, brushSize, lineStyle]);
 
-  // Auto-save when drawing changes
+  // Auto-save and handle eraser functionality
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    const autoSave = () => {
-      setTimeout(() => saveDrawing(), 500); // Debounce auto-save
+    const handlePathCreated = (e: any) => {
+      const path = e.path;
+      if (path) {
+        // Handle eraser functionality
+        if (tool === 'erase') {
+          console.log('Eraser path created, applying destination-out');
+          path.globalCompositeOperation = 'destination-out';
+          path.set({
+            stroke: 'rgba(0,0,0,1)', // Use opaque black for erasing
+            fill: 'transparent'
+          });
+          canvas.renderAll();
+        } else {
+          // Normal drawing - ensure source-over
+          path.globalCompositeOperation = 'source-over';
+        }
+      }
+      
+      // Auto-save after a delay
+      setTimeout(() => saveDrawing(), 500);
     };
 
-    canvas.on('path:created', autoSave);
+    canvas.on('path:created', handlePathCreated);
 
     return () => {
-      canvas.off('path:created', autoSave);
+      canvas.off('path:created', handlePathCreated);
     };
-  }, [saveDrawing]);
+  }, [tool, saveDrawing]);
 
   const clearCanvas = () => {
     const canvas = fabricCanvasRef.current;
