@@ -10,8 +10,10 @@ import {
   Heart, 
   Plus,
   Palette,
-  Crown
+  Crown,
+  Upload
 } from 'lucide-react';
+import { CreatePinTemplateModal } from './CreatePinTemplateModal';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -24,6 +26,7 @@ interface PinTemplate {
   size: 'small' | 'medium' | 'large';
   icon?: string;
   style?: any;
+  imageUrl?: string;
   isDefault: boolean;
   isPublic: boolean;
 }
@@ -56,6 +59,7 @@ export const PinTemplateSelector: React.FC<PinTemplateSelectorProps> = ({
 }) => {
   const [templates, setTemplates] = useState<PinTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -81,6 +85,7 @@ export const PinTemplateSelector: React.FC<PinTemplateSelectorProps> = ({
         size: template.size as PinTemplate['size'],
         icon: template.icon,
         style: template.style,
+        imageUrl: template.image_url,
         isDefault: template.is_default,
         isPublic: template.is_public,
       }));
@@ -99,7 +104,19 @@ export const PinTemplateSelector: React.FC<PinTemplateSelectorProps> = ({
   };
 
   const renderTemplatePreview = (template: PinTemplate) => {
-    const IconComponent = shapeIcons[template.shape];
+    if (template.shape === 'custom' && template.imageUrl) {
+      return (
+        <div className="flex items-center justify-center w-12 h-12 rounded-lg border-2 bg-background overflow-hidden">
+          <img
+            src={template.imageUrl}
+            alt={template.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      );
+    }
+
+    const IconComponent = shapeIcons[template.shape] || Circle;
     const size = sizeMap[template.size];
     
     return (
@@ -148,6 +165,18 @@ export const PinTemplateSelector: React.FC<PinTemplateSelectorProps> = ({
         </div>
 
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium">템플릿 선택</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              새 템플릿
+            </Button>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {templates.map((template) => (
               <Card
@@ -209,6 +238,16 @@ export const PinTemplateSelector: React.FC<PinTemplateSelectorProps> = ({
             선택 완료
           </Button>
         </div>
+
+        {/* Create Template Modal */}
+        <CreatePinTemplateModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSubmit={(newTemplate) => {
+            setTemplates(prev => [...prev, newTemplate]);
+            fetchTemplates(); // Refresh list
+          }}
+        />
       </div>
     </div>
   );

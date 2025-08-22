@@ -275,6 +275,7 @@ export type Database = {
           description: string | null
           icon: string | null
           id: string
+          image_url: string | null
           is_default: boolean
           is_public: boolean
           name: string
@@ -290,6 +291,7 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          image_url?: string | null
           is_default?: boolean
           is_public?: boolean
           name: string
@@ -305,6 +307,7 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          image_url?: string | null
           is_default?: boolean
           is_public?: boolean
           name?: string

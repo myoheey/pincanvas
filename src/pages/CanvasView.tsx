@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X, Share, Lock, Unlock, Palette, Pen } from 'lucide-react';
+import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X, Share, Lock, Unlock, Palette, Pen, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ import { EditLayerNameModal } from '@/components/EditLayerNameModal';
 import { PinTemplateSelector } from '@/components/PinTemplateSelector';
 import { DrawingCanvas } from '@/components/DrawingCanvas';
 import { PinRenderer } from '@/components/PinRenderer';
+import { CanvasExporter } from '@/components/CanvasExporter';
 import CanvasBackgroundSelector from '@/components/CanvasBackgroundSelector';
 import LayerColorPicker from '@/components/LayerColorPicker';
 import ImageIcon from '@/components/ui/icons/ImageIcon';
@@ -61,6 +62,7 @@ interface PinTemplate {
   size: 'small' | 'medium' | 'large';
   icon?: string;
   style?: any;
+  imageUrl?: string;
   isDefault: boolean;
   isPublic: boolean;
 }
@@ -192,7 +194,8 @@ const CanvasView = () => {
             color: pin.pin_templates.color,
             size: pin.pin_templates.size as PinTemplate['size'],
             icon: pin.pin_templates.icon,
-            style: pin.pin_templates.style,
+        style: pin.pin_templates.style,
+        imageUrl: pin.pin_templates.image_url,
             isDefault: pin.pin_templates.is_default,
             isPublic: pin.pin_templates.is_public,
           } : undefined,
@@ -236,6 +239,7 @@ const CanvasView = () => {
         size: template.size as PinTemplate['size'],
         icon: template.icon,
         style: template.style,
+        imageUrl: template.image_url,
         isDefault: template.is_default,
         isPublic: template.is_public,
       }));
@@ -793,6 +797,10 @@ const CanvasView = () => {
                     {isDrawingMode ? '드로잉 중' : '드로잉'}
                   </span>
                 </Button>
+                <CanvasExporter 
+                  canvasElementId="main-canvas"
+                  canvasTitle={canvas.title}
+                />
                 {isOwner && canvas && (
                   <>
                     <CanvasBackgroundSelector
@@ -976,6 +984,7 @@ const CanvasView = () => {
           )}
 
           <div
+            id="main-canvas"
             className={`relative bg-white rounded-lg shadow-lg overflow-hidden ${isPresentationMode ? 'w-full h-full cursor-default' : 'cursor-crosshair'}`}
             style={{ 
               minHeight: '600px',
@@ -1022,12 +1031,13 @@ const CanvasView = () => {
             ))}
 
             {/* Drawing Canvas - only show in drawing mode or if canvas has drawings */}
-            {(isDrawingMode || selectedLayerId) && selectedLayerId && (
+            {selectedLayerId && (
               <DrawingCanvas
                 canvasId={id || ''}
                 layerId={selectedLayerId}
                 width={canvasWidth}
                 height={canvasHeight}
+                isVisible={isDrawingMode}
                 onDrawingChange={(hasDrawing) => {
                   // Handle drawing state change if needed
                 }}
