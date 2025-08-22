@@ -125,8 +125,57 @@ const CanvasView = () => {
     if (id) {
       fetchCanvasData();
       fetchPinTemplates();
+      checkUserPermission();
     }
-  }, [id]);
+  }, [id, user]);
+
+  const checkUserPermission = async () => {
+    if (!user || !id) {
+      setUserPermission(null);
+      return;
+    }
+
+    try {
+      // Check if user is the owner
+      const { data: canvasData, error: canvasError } = await supabase
+        .from('canvases')
+        .select('owner_id, is_public, public_permission')
+        .eq('id', id)
+        .single();
+
+      if (canvasError) throw canvasError;
+
+      if (canvasData.owner_id === user.id) {
+        setUserPermission('owner');
+        return;
+      }
+
+      // Check if canvas is public
+      if (canvasData.is_public) {
+        setUserPermission(canvasData.public_permission as 'viewer' | 'editor');
+        return;
+      }
+
+      // Check if user has explicit share permission
+      const { data: shareData, error: shareError } = await supabase
+        .from('canvas_shares')
+        .select('permission')
+        .eq('canvas_id', id)
+        .eq('shared_with_email', user.email)
+        .single();
+
+      if (shareError && shareError.code !== 'PGRST116') throw shareError;
+
+      if (shareData) {
+        setUserPermission(shareData.permission as 'viewer' | 'editor');
+      } else {
+        setUserPermission('viewer'); // Default to viewer if no explicit permission
+      }
+    } catch (error) {
+      console.error('Error checking user permission:', error);
+      setUserPermission('viewer'); // Default to viewer on error
+    }
+  };
 
   const fetchCanvasData = async () => {
     try {
@@ -312,6 +361,7 @@ const CanvasView = () => {
 
   const handleCanvasClick = async (e: React.MouseEvent<HTMLDivElement>) => {
     if (isDrawingMode) return; // Don't add pins in drawing mode
+    if (!canEdit) return; // Don't add pins if user can't edit
     
     if (!selectedLayerId) return;
     
@@ -748,7 +798,10 @@ const CanvasView = () => {
     }
   };
 
+  const [userPermission, setUserPermission] = useState<'owner' | 'editor' | 'viewer' | null>(null);
+  
   const isOwner = canvas && user?.id === canvas.ownerId;
+  const canEdit = userPermission === 'owner' || userPermission === 'editor';
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 ${isPresentationMode ? 'p-0' : ''}`}>
@@ -768,7 +821,7 @@ const CanvasView = () => {
                 <div>
                   <div className="flex items-center space-x-2">
                     <h1 className="text-xl font-bold">{canvas.title}</h1>
-                    {isOwner && (
+                    {canEdit && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -800,17 +853,19 @@ const CanvasView = () => {
                     {selectedPinTemplate ? selectedPinTemplate.name : '핀 템플릿'}
                   </span>
                 </Button>
-                <Button
-                  variant={isDrawingMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setIsDrawingMode(!isDrawingMode)}
-                  className="flex items-center space-x-2"
-                >
-                  <Pen className="w-4 h-4" />
-                  <span className="text-xs">
-                    {isDrawingMode ? '드로잉 중' : '드로잉'}
-                  </span>
-                </Button>
+                {canEdit && (
+                  <Button
+                    variant={isDrawingMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setIsDrawingMode(!isDrawingMode)}
+                    className="flex items-center space-x-2"
+                  >
+                    <Pen className="w-4 h-4" />
+                    <span className="text-xs">
+                      {isDrawingMode ? '드로잉 중' : '드로잉'}
+                    </span>
+                  </Button>
+                )}
                 <CanvasExporter 
                   canvasElementId="main-canvas"
                   canvasTitle={canvas.title}
@@ -894,13 +949,15 @@ const CanvasView = () => {
                   <Layers className="w-5 h-5 mr-2" />
                   레이어 관리
                 </h2>
-                <Button
-                  size="sm"
-                  onClick={() => setIsCreateLayerModalOpen(true)}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  추가
-                </Button>
+                {canEdit && (
+                  <Button
+                    size="sm"
+                    onClick={() => setIsCreateLayerModalOpen(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    추가
+                  </Button>
+                )}
               </div>
               
               <div className="space-y-3">
@@ -926,7 +983,7 @@ const CanvasView = () => {
                         </div>
                         
                         <div className="flex items-center space-x-2">
-                          {isOwner && (
+                          {canEdit && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -940,7 +997,7 @@ const CanvasView = () => {
                               <Edit className="w-3 h-3" />
                             </Button>
                           )}
-                          {isOwner && (
+                          {canEdit && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -972,7 +1029,7 @@ const CanvasView = () => {
                               <EyeOff className="w-4 h-4" />
                             )}
                           </Button>
-                          {isOwner && (
+                          {canEdit && (
                             <Button
                               variant="ghost"
                               size="icon"
