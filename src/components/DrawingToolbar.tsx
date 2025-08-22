@@ -158,9 +158,9 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </Button>
       </div>
 
-      {/* Clear Canvas and Delete Selected */}
-      <div className="border-l pl-4 flex items-center gap-1">
-        {tool === 'select' && deleteSelected && (
+      {/* Delete Selected Only */}
+      {tool === 'select' && deleteSelected && (
+        <div className="border-l pl-4">
           <Button
             size="sm"
             variant="outline"
@@ -169,16 +169,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           >
             <Trash2 className="w-4 h-4" />
           </Button>
-        )}
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={clearCanvas}
-          title="전체 지우기"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   );
 };
