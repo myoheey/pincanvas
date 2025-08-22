@@ -8,7 +8,6 @@ import {
   Undo, 
   Redo, 
   Trash2, 
-  Save, 
   MousePointer,
   X
 } from 'lucide-react';
@@ -43,6 +42,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const [brushSize, setBrushSize] = useState(2);
   const [brushColor, setBrushColor] = useState('#000000');
   const [tool, setTool] = useState<'select' | 'draw' | 'erase'>('select');
+  const [lineStyle, setLineStyle] = useState<'solid' | 'dashed' | 'dotted'>('solid');
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const { toast } = useToast();
@@ -82,20 +82,6 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       canvas.dispose();
     };
   }, [canvasId, layerId, width, height]);
-
-  useEffect(() => {
-    const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
-
-    canvas.isDrawingMode = tool === 'draw';
-    
-    if (canvas.freeDrawingBrush) {
-      canvas.freeDrawingBrush.color = tool === 'erase' ? '#FFFFFF' : brushColor;
-      canvas.freeDrawingBrush.width = brushSize;
-    }
-
-    setIsDrawingMode(tool === 'draw');
-  }, [tool, brushColor, brushSize]);
 
   const loadDrawings = async () => {
     try {
@@ -149,20 +135,53 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       }
 
       onDrawingChange?.(hasObjects);
-      
-      toast({
-        title: "저장 완료",
-        description: "드로잉이 저장되었습니다.",
-      });
     } catch (error) {
       console.error('Error saving drawing:', error);
-      toast({
-        title: "저장 실패",
-        description: "드로잉 저장 중 오류가 발생했습니다.",
-        variant: "destructive",
-      });
     }
-  }, [canvasId, layerId, onDrawingChange, toast]);
+  }, [canvasId, layerId, onDrawingChange]);
+
+  // Configure drawing tools and styles
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    canvas.isDrawingMode = tool === 'draw' || tool === 'erase';
+    
+    if (canvas.freeDrawingBrush) {
+      canvas.freeDrawingBrush.width = brushSize;
+      
+      // Configure line style
+      const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
+      (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
+      
+      if (tool === 'erase') {
+        // For eraser, we'll use a special approach
+        canvas.freeDrawingBrush.color = 'rgba(0,0,0,1)';
+        (canvas.freeDrawingBrush as any).globalCompositeOperation = 'destination-out';
+      } else {
+        canvas.freeDrawingBrush.color = brushColor;
+        (canvas.freeDrawingBrush as any).globalCompositeOperation = 'source-over';
+      }
+    }
+
+    setIsDrawingMode(tool === 'draw' || tool === 'erase');
+  }, [tool, brushColor, brushSize, lineStyle]);
+
+  // Auto-save when drawing changes
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const autoSave = () => {
+      setTimeout(() => saveDrawing(), 500); // Debounce auto-save
+    };
+
+    canvas.on('path:created', autoSave);
+
+    return () => {
+      canvas.off('path:created', autoSave);
+    };
+  }, [saveDrawing]);
 
   const clearCanvas = () => {
     const canvas = fabricCanvasRef.current;
@@ -209,8 +228,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   };
 
   return (
-    <div className={`absolute inset-0 pointer-events-none ${!isVisible ? 'hidden' : ''}`}>
-      {/* Drawing Canvas */}
+    <div className="absolute inset-0 pointer-events-none">
+      {/* Drawing Canvas - always visible */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 pointer-events-auto"
@@ -280,6 +299,29 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
             </div>
           )}
 
+          {tool === 'draw' && (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-gray-700">선 종류</label>
+              <div className="flex space-x-1">
+                {[
+                  { key: 'solid', label: '실선' },
+                  { key: 'dashed', label: '점선' },
+                  { key: 'dotted', label: '점선2' }
+                ].map((style) => (
+                  <Button
+                    key={style.key}
+                    size="sm"
+                    variant={lineStyle === style.key ? 'default' : 'outline'}
+                    onClick={() => setLineStyle(style.key as 'solid' | 'dashed' | 'dotted')}
+                    className="text-xs px-2 py-1"
+                  >
+                    {style.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center space-x-2">
             <Button
               size="sm"
@@ -300,13 +342,6 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={saveDrawing}
-            >
-              <Save className="w-4 h-4" />
-            </Button>
             <Button
               size="sm"
               variant="destructive"
