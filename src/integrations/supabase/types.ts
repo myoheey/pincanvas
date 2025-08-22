@@ -331,6 +331,10 @@ export type Database = {
         Args: { canvas_id: string }
         Returns: boolean
       }
+      user_has_canvas_access: {
+        Args: { canvas_id: string; user_email: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
