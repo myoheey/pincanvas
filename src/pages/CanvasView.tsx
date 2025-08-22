@@ -12,6 +12,7 @@ import { CanvasSettingsModal } from '@/components/CanvasSettingsModal';
 import { EditCanvasNameModal } from '@/components/EditCanvasNameModal';
 import { EditLayerNameModal } from '@/components/EditLayerNameModal';
 import CanvasBackgroundSelector from '@/components/CanvasBackgroundSelector';
+import LayerColorPicker from '@/components/LayerColorPicker';
 import ImageIcon from '@/components/ui/icons/ImageIcon';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -616,6 +617,34 @@ const CanvasView = () => {
     }
   };
 
+  const handleLayerColorChange = async (layerId: string, color: string) => {
+    try {
+      const { error } = await supabase
+        .from('layers')
+        .update({ color })
+        .eq('id', layerId);
+
+      if (error) throw error;
+
+      // Update local state
+      setLayers(layers.map(layer => 
+        layer.id === layerId ? { ...layer, color } : layer
+      ));
+
+      toast({
+        title: "레이어 색상 변경 완료",
+        description: "레이어 색상이 변경되었습니다.",
+      });
+    } catch (error) {
+      console.error('Error updating layer color:', error);
+      toast({
+        title: "오류",
+        description: "레이어 색상 변경 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const isOwner = canvas && user?.id === canvas.ownerId;
 
   return (
@@ -729,9 +758,9 @@ const CanvasView = () => {
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
-                          <div
-                            className="w-4 h-4 rounded-full border-2"
-                            style={{ backgroundColor: layer.color }}
+                          <LayerColorPicker 
+                            currentColor={layer.color}
+                            onColorChange={(color) => handleLayerColorChange(layer.id, color)}
                           />
                           <span className="font-medium flex-1">{layer.name}</span>
                           {layer.locked && <Lock className="w-3 h-3 text-muted-foreground" />}
