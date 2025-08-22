@@ -38,6 +38,7 @@ interface PinRendererProps {
   template: PinTemplate | null;
   onClick: () => void;
   isVisible: boolean;
+  layerColor?: string;
 }
 
 const shapeComponents = {
@@ -60,15 +61,19 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
   template,
   onClick,
   isVisible,
+  layerColor,
 }) => {
   if (!isVisible) return null;
 
   // Use template if available, otherwise fall back to default
   const displayTemplate = template || {
     shape: 'circle' as const,
-    color: '#3b82f6',
+    color: layerColor || '#3b82f6',
     size: 'medium' as const,
   };
+
+  // If layerColor is provided, use it instead of template color
+  const finalColor = layerColor || displayTemplate.color;
 
   // Custom image template
   if (displayTemplate.shape === 'custom' && displayTemplate.imageUrl) {
@@ -123,11 +128,11 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
         <ShapeComponent
           size={size}
           style={{ 
-            color: displayTemplate.color,
+            color: finalColor,
             filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
           }}
-          fill={displayTemplate.shape === 'circle' ? displayTemplate.color : 'none'}
-          stroke={displayTemplate.color}
+          fill={displayTemplate.shape === 'circle' ? finalColor : 'none'}
+          stroke={finalColor}
           strokeWidth={displayTemplate.shape === 'circle' ? 0 : 2}
         />
         

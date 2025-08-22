@@ -151,58 +151,53 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    console.log('Setting drawing mode:', tool);
+    console.log('Setting drawing mode:', tool, 'brush size:', brushSize, 'color:', brushColor);
+    
+    // Set drawing mode
     canvas.isDrawingMode = tool === 'draw' || tool === 'erase';
     
-    if (canvas.freeDrawingBrush) {
+    if (tool === 'erase') {
+      console.log('Configuring eraser mode');
+      // For erasing, create a brush with destination-out composite operation
+      canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
+      canvas.freeDrawingBrush.color = 'rgba(0,0,0,1)'; // Use black for erasing
       
-      if (tool === 'erase') {
-        console.log('Configuring eraser mode');
-        canvas.freeDrawingBrush.color = 'rgba(255,255,255,1)';
-        
-        // Override the brush to use destination-out for erasing
-        const originalBrush = canvas.freeDrawingBrush;
-        const originalOnMouseDown = originalBrush.onMouseDown;
-        const originalOnMouseMove = originalBrush.onMouseMove;
-        
-        originalBrush.onMouseDown = function(pointer: any) {
-          const ctx = canvas.getContext();
-          ctx.globalCompositeOperation = 'destination-out';
-          return originalOnMouseDown.call(this, pointer);
-        };
-        
-        originalBrush.onMouseMove = function(pointer: any) {
-          const ctx = canvas.getContext();
-          ctx.globalCompositeOperation = 'destination-out';
-          return originalOnMouseMove.call(this, pointer);
-        };
-      } else if (tool === 'draw') {
-        console.log('Configuring drawing mode');
-        canvas.freeDrawingBrush.color = brushColor;
-        
-        // Reset brush for normal drawing
-        const originalBrush = canvas.freeDrawingBrush;
-        const originalOnMouseDown = originalBrush.onMouseDown;
-        const originalOnMouseMove = originalBrush.onMouseMove;
-        
-        originalBrush.onMouseDown = function(pointer: any) {
-          const ctx = canvas.getContext();
-          ctx.globalCompositeOperation = 'source-over';
-          return originalOnMouseDown.call(this, pointer);
-        };
-        
-        originalBrush.onMouseMove = function(pointer: any) {
-          const ctx = canvas.getContext();
-          ctx.globalCompositeOperation = 'source-over';
-          return originalOnMouseMove.call(this, pointer);
-        };
-        
-        // Configure line style
-        const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
-        (originalBrush as any).strokeDashArray = dashArray;
+      // Enable eraser mode if available in Fabric.js v6
+      const brush = canvas.freeDrawingBrush as any;
+      if (brush.globalCompositeOperation !== undefined) {
+        brush.globalCompositeOperation = 'destination-out';
       }
+      
+    } else if (tool === 'draw') {
+      console.log('Configuring drawing mode with color:', brushColor);
+      // Normal drawing
+      canvas.freeDrawingBrush = new PencilBrush(canvas);
+      canvas.freeDrawingBrush.width = brushSize;
+      canvas.freeDrawingBrush.color = brushColor;
+      
+      // Reset composite operation for normal drawing
+      const brush = canvas.freeDrawingBrush as any;
+      if (brush.globalCompositeOperation !== undefined) {
+        brush.globalCompositeOperation = 'source-over';
+      }
+      
+      // Configure line style
+      const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
+      if (dashArray.length > 0) {
+        (brush as any).strokeDashArray = dashArray;
+      }
+    } else {
+      // Select mode - disable drawing
+      canvas.isDrawingMode = false;
     }
+    
+    console.log('Brush configured:', {
+      width: canvas.freeDrawingBrush?.width,
+      color: canvas.freeDrawingBrush?.color,
+      tool: tool,
+      isDrawingMode: canvas.isDrawingMode
+    });
   }, [tool, brushColor, brushSize, lineStyle]);
 
   // Auto-save when drawing changes

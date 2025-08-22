@@ -1065,6 +1065,7 @@ const CanvasView = () => {
                 template={pin.template}
                 onClick={() => handlePinClick(pin)}
                 isVisible={true}
+                layerColor={getLayerColor(pin.layerId)}
               />
             ))}
 
