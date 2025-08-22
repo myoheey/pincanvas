@@ -120,8 +120,6 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
             canvas_id: canvasId,
             layer_id: layerId,
             drawing_data: drawingData,
-          }, {
-            onConflict: 'canvas_id,layer_id'
           });
 
         if (error) throw error;
@@ -150,17 +148,40 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     if (canvas.freeDrawingBrush) {
       canvas.freeDrawingBrush.width = brushSize;
       
-      // Configure line style
-      const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
-      (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
-      
       if (tool === 'erase') {
-        // For eraser, we'll use a special approach
+        // Configure eraser
         canvas.freeDrawingBrush.color = 'rgba(0,0,0,1)';
-        (canvas.freeDrawingBrush as any).globalCompositeOperation = 'destination-out';
+        // Set the context to erase mode
+        const originalOnMouseDown = canvas.freeDrawingBrush.onMouseDown;
+        const originalOnMouseMove = canvas.freeDrawingBrush.onMouseMove;
+        const originalOnMouseUp = canvas.freeDrawingBrush.onMouseUp;
+        
+        canvas.freeDrawingBrush.onMouseDown = function(pointer) {
+          const ctx = canvas.getContext();
+          ctx.globalCompositeOperation = 'destination-out';
+          return originalOnMouseDown?.call(this, pointer);
+        };
+        
+        canvas.freeDrawingBrush.onMouseMove = function(pointer) {
+          const ctx = canvas.getContext();
+          ctx.globalCompositeOperation = 'destination-out';
+          return originalOnMouseMove?.call(this, pointer);
+        };
+        
+        canvas.freeDrawingBrush.onMouseUp = function() {
+          const ctx = canvas.getContext();
+          ctx.globalCompositeOperation = 'source-over';
+          return originalOnMouseUp?.call(this);
+        };
       } else {
         canvas.freeDrawingBrush.color = brushColor;
-        (canvas.freeDrawingBrush as any).globalCompositeOperation = 'source-over';
+        // Reset to normal drawing mode
+        const ctx = canvas.getContext();
+        ctx.globalCompositeOperation = 'source-over';
+        
+        // Configure line style for drawing
+        const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
+        (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
       }
     }
 
