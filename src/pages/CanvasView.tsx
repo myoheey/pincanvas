@@ -86,10 +86,15 @@ const CanvasView = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Core state - consolidated to prevent hook order issues
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   const [layers, setLayers] = useState<Layer[]>([]);
   const [pins, setPins] = useState<PinData[]>([]);
   const [selectedLayerId, setSelectedLayerId] = useState<string>('');
+  const [userPermission, setUserPermission] = useState<'owner' | 'editor' | 'viewer' | null>(null);
+  
+  // Modal states
   const [selectedPin, setSelectedPin] = useState<PinData | null>(null);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isCreateLayerModalOpen, setIsCreateLayerModalOpen] = useState(false);
@@ -101,21 +106,22 @@ const CanvasView = () => {
   const [isEditLayerNameModalOpen, setIsEditLayerNameModalOpen] = useState(false);
   const [editingLayerId, setEditingLayerId] = useState<string>('');
   const [isPinTemplateSelectorOpen, setIsPinTemplateSelectorOpen] = useState(false);
+  
+  // Pin template state
   const [selectedPinTemplate, setSelectedPinTemplate] = useState<PinTemplate | null>(null);
   const [pinTemplates, setPinTemplates] = useState<PinTemplate[]>([]);
+  
+  // Drawing states
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [canvasWidth, setCanvasWidth] = useState(800);
   const [canvasHeight, setCanvasHeight] = useState(600);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
-  
-  // Drawing states
   const [drawingTool, setDrawingTool] = useState<'select' | 'draw' | 'erase'>('select');
   const [brushSize, setBrushSize] = useState(2);
   const [brushColor, setBrushColor] = useState('#000000');
   const [lineStyle, setLineStyle] = useState<'solid' | 'dashed' | 'dotted'>('solid');
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
-  const [userPermission, setUserPermission] = useState<'owner' | 'editor' | 'viewer' | null>(null);
   
   // Drawing functions (placeholder - will be connected to actual canvas)
   const undo = () => console.log('Undo');
@@ -1143,14 +1149,8 @@ const CanvasView = () => {
                 brushSize={brushSize}
                 brushColor={brushColor}
                 lineStyle={lineStyle}
-                onDrawingChange={(hasDrawing) => {
-                  setLayers(prev => 
-                    prev.map(l => 
-                      l.id === selectedLayerId 
-                        ? { ...l, has_drawing: hasDrawing }
-                        : l
-                    )
-                  );
+                onDrawingChange={() => {
+                  // Drawing change handler - removed problematic layer state update
                 }}
                 onUndoStackChange={setUndoStack}
                 onRedoStackChange={setRedoStack}
