@@ -27,18 +27,22 @@ interface Like {
 
 interface CommentSystemProps {
   pinId: string;
+  canvasId: string;
   canvasOwnerId: string;
   allowComments: boolean;
   allowLikes: boolean;
   isOwner: boolean;
+  isPublicCanvas?: boolean;
 }
 
 export const CommentSystem: React.FC<CommentSystemProps> = ({
   pinId,
+  canvasId,
   canvasOwnerId,
   allowComments,
   allowLikes,
   isOwner,
+  isPublicCanvas = false,
 }) => {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -47,16 +51,40 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
   const [authorName, setAuthorName] = useState('');
   const [isLiked, setIsLiked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [canSeeEmails, setCanSeeEmails] = useState(false);
 
   useEffect(() => {
     fetchComments();
     fetchLikes();
+    checkEmailPermissions();
     
     // Set default author name from user profile
     if (user?.email) {
       setAuthorName(user.email.split('@')[0]);
     }
-  }, [pinId]);
+  }, [pinId, canvasId, user]);
+
+  const checkEmailPermissions = async () => {
+    if (!user || isOwner) {
+      setCanSeeEmails(isOwner);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .rpc('user_can_see_emails_for_canvas', { canvas_id: canvasId });
+      
+      if (error) {
+        console.error('Error checking email permissions:', error);
+        setCanSeeEmails(false);
+      } else {
+        setCanSeeEmails(data || false);
+      }
+    } catch (error) {
+      console.error('Error checking email permissions:', error);
+      setCanSeeEmails(false);
+    }
+  };
 
   const fetchComments = async () => {
     if (!allowComments) return;
@@ -89,8 +117,12 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
       
       // Check if current user liked this pin
       const userEmail = user?.email;
-      if (userEmail) {
+      if (userEmail && canSeeEmails) {
         setIsLiked(data?.some(like => like.author_email === userEmail) || false);
+      } else if (userEmail) {
+        // For public access, check by comparing author_name as fallback
+        const userName = userEmail.split('@')[0];
+        setIsLiked(data?.some(like => like.author_name === userName) || false);
       }
     }
   };
@@ -105,7 +137,7 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
         pin_id: pinId,
         content: newComment.trim(),
         author_name: authorName.trim(),
-        author_email: user?.email || null,
+        author_email: canSeeEmails ? (user?.email || null) : null,
       });
 
     if (error) {
@@ -154,12 +186,19 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
     setLoading(true);
     
     if (isLiked) {
-      // Remove like
-      const { error } = await supabase
+      // Remove like - try both email and name matching for compatibility
+      let deleteQuery = supabase
         .from('likes')
         .delete()
-        .eq('pin_id', pinId)
-        .eq('author_email', user?.email || '');
+        .eq('pin_id', pinId);
+      
+      if (canSeeEmails && user?.email) {
+        deleteQuery = deleteQuery.eq('author_email', user.email);
+      } else {
+        deleteQuery = deleteQuery.eq('author_name', authorName.trim());
+      }
+
+      const { error } = await deleteQuery;
 
       if (error) {
         console.error('Error removing like:', error);
@@ -179,7 +218,7 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
         .insert({
           pin_id: pinId,
           author_name: authorName.trim(),
-          author_email: user?.email || null,
+          author_email: canSeeEmails ? (user?.email || null) : null,
         });
 
       if (error) {
@@ -198,7 +237,20 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
   };
 
   const canDeleteComment = (comment: Comment) => {
-    return isOwner || (user?.email && comment.author_email === user.email);
+    if (isOwner) return true;
+    
+    // If we can see emails, use email matching
+    if (canSeeEmails && user?.email && comment.author_email) {
+      return comment.author_email === user.email;
+    }
+    
+    // For public access, use name matching as fallback
+    if (user?.email) {
+      const userName = user.email.split('@')[0];
+      return comment.author_name === userName;
+    }
+    
+    return false;
   };
 
   if (!allowComments && !allowLikes) return null;
