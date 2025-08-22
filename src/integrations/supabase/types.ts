@@ -311,9 +311,82 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      comments_secure: {
+        Row: {
+          author_email: string | null
+          author_name: string | null
+          content: string | null
+          created_at: string | null
+          id: string | null
+          pin_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          author_email?: never
+          author_name?: string | null
+          content?: string | null
+          created_at?: string | null
+          id?: string | null
+          pin_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          author_email?: never
+          author_name?: string | null
+          content?: string | null
+          created_at?: string | null
+          id?: string | null
+          pin_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_pin_id_fkey"
+            columns: ["pin_id"]
+            isOneToOne: false
+            referencedRelation: "pins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      likes_secure: {
+        Row: {
+          author_email: string | null
+          author_name: string | null
+          created_at: string | null
+          id: string | null
+          pin_id: string | null
+        }
+        Insert: {
+          author_email?: never
+          author_name?: string | null
+          created_at?: string | null
+          id?: string | null
+          pin_id?: string | null
+        }
+        Update: {
+          author_email?: never
+          author_name?: string | null
+          created_at?: string | null
+          id?: string | null
+          pin_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "likes_pin_id_fkey"
+            columns: ["pin_id"]
+            isOneToOne: false
+            referencedRelation: "pins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      can_see_author_email: {
+        Args: { canvas_id: string }
+        Returns: boolean
+      }
       get_current_user_email: {
         Args: Record<PropertyKey, never>
         Returns: string
