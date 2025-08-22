@@ -81,15 +81,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signInWithGoogle = async () => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: redirectUrl
-      }
-    });
-    return { error };
+    try {
+      console.log('Starting Google sign in...');
+      const redirectUrl = `${window.location.origin}/`;
+      console.log('Redirect URL:', redirectUrl);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl
+        }
+      });
+      
+      console.log('Google OAuth result:', { data, error });
+      return { error };
+    } catch (err) {
+      console.error('Google sign in error:', err);
+      return { error: err };
+    }
   };
 
   const signOut = async () => {
