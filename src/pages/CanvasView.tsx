@@ -115,6 +115,7 @@ const CanvasView = () => {
   const [lineStyle, setLineStyle] = useState<'solid' | 'dashed' | 'dotted'>('solid');
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
+  const [userPermission, setUserPermission] = useState<'owner' | 'editor' | 'viewer' | null>(null);
   
   // Drawing functions (placeholder - will be connected to actual canvas)
   const undo = () => console.log('Undo');
@@ -798,7 +799,6 @@ const CanvasView = () => {
     }
   };
 
-  const [userPermission, setUserPermission] = useState<'owner' | 'editor' | 'viewer' | null>(null);
   
   const isOwner = canvas && user?.id === canvas.ownerId;
   const canEdit = userPermission === 'owner' || userPermission === 'editor';
