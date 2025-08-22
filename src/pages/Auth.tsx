@@ -61,14 +61,33 @@ const Auth = () => {
   };
 
   const handleGoogleSignIn = async () => {
+    console.log('Google sign in button clicked');
     setIsLoading(true);
     setError('');
     
-    const { error } = await signInWithGoogle();
-    
-    if (error) {
-      setError(error.message);
+    try {
+      console.log('Starting Google sign in...');
+      const redirectUrl = `${window.location.origin}/`;
+      console.log('Redirect URL:', redirectUrl);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl
+        }
+      });
+      
+      console.log('Google OAuth result:', { data, error });
+      
+      if (error) {
+        console.error('Google OAuth error:', error);
+        setError(`구글 로그인 실패: ${error.message}`);
+      }
+    } catch (err) {
+      console.error('Google sign in catch error:', err);
+      setError(`구글 로그인 중 오류가 발생했습니다: ${err}`);
     }
+    
     setIsLoading(false);
   };
 
