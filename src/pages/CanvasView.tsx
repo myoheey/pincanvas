@@ -851,6 +851,30 @@ const CanvasView = () => {
               </div>
             </div>
           </div>
+          
+          {/* Drawing Toolbar - positioned below header when drawing mode is active */}
+          {isDrawingMode && (
+            <div className="bg-white/90 backdrop-blur-sm border-b border-border/50 px-6 py-3">
+              <div className="max-w-7xl mx-auto">
+                <DrawingToolbar
+                  tool={drawingTool}
+                  setTool={setDrawingTool}
+                  brushSize={brushSize}
+                  setBrushSize={setBrushSize}
+                  brushColor={brushColor}
+                  setBrushColor={setBrushColor}
+                  lineStyle={lineStyle}
+                  setLineStyle={setLineStyle}
+                  undoStack={undoStack}
+                  redoStack={redoStack}
+                  undo={undo}
+                  redo={redo}
+                  clearCanvas={clearCanvas}
+                  isVisible={true}
+                />
+              </div>
+            </div>
+          )}
         </header>
       )}
 
@@ -1051,6 +1075,10 @@ const CanvasView = () => {
                 layerId={selectedLayerId}
                 width={canvasWidth}
                 height={canvasHeight}
+                tool={drawingTool}
+                brushSize={brushSize}
+                brushColor={brushColor}
+                lineStyle={lineStyle}
                 onDrawingChange={(hasDrawing) => {
                   setLayers(prev => 
                     prev.map(l => 
@@ -1060,26 +1088,8 @@ const CanvasView = () => {
                     )
                   );
                 }}
-              />
-            )}
-            
-            {/* Drawing Toolbar - positioned outside canvas */}
-            {isDrawingMode && (
-              <DrawingToolbar
-                tool={drawingTool}
-                setTool={setDrawingTool}
-                brushSize={brushSize}
-                setBrushSize={setBrushSize}
-                brushColor={brushColor}
-                setBrushColor={setBrushColor}
-                lineStyle={lineStyle}
-                setLineStyle={setLineStyle}
-                undoStack={undoStack}
-                redoStack={redoStack}
-                undo={undo}
-                redo={redo}
-                clearCanvas={clearCanvas}
-                isVisible={true}
+                onUndoStackChange={setUndoStack}
+                onRedoStackChange={setRedoStack}
               />
             )}
           </div>

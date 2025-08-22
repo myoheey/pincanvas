@@ -51,12 +51,9 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div className="fixed top-4 right-4 bg-white rounded-lg shadow-lg p-4 space-y-4 pointer-events-auto z-30">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium text-sm">드로잉 도구</h3>
-      </div>
-      
-      <div className="flex items-center space-x-2">
+    <div className="flex items-center gap-4 bg-white rounded-lg shadow-sm border p-3">
+      {/* Tool Selection */}
+      <div className="flex items-center gap-2">
         <Button
           size="sm"
           variant={tool === 'select' ? 'default' : 'outline'}
@@ -80,24 +77,27 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </Button>
       </div>
 
+      {/* Brush Size */}
       {(tool === 'draw' || tool === 'erase') && (
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-700">브러시 크기</label>
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-gray-700 whitespace-nowrap">브러시 크기</label>
           <Slider
             value={[brushSize]}
             onValueChange={(value) => setBrushSize(value[0])}
             max={20}
             min={1}
             step={1}
-            className="w-32"
+            className="w-20"
           />
+          <span className="text-xs text-gray-500 w-6">{brushSize}</span>
         </div>
       )}
 
+      {/* Color Selection */}
       {tool === 'draw' && (
-        <div className="space-y-2">
+        <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-gray-700">색상</label>
-          <div className="grid grid-cols-5 gap-1">
+          <div className="flex gap-1">
             {colors.map((color) => (
               <button
                 key={color}
@@ -112,10 +112,11 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </div>
       )}
 
+      {/* Line Style */}
       {tool === 'draw' && (
-        <div className="space-y-2">
+        <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-gray-700">선 종류</label>
-          <div className="flex space-x-1">
+          <div className="flex gap-1">
             {[
               { key: 'solid', label: '실선' },
               { key: 'dashed', label: '점선' },
@@ -135,7 +136,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </div>
       )}
 
-      <div className="flex items-center space-x-2">
+      {/* Undo/Redo */}
+      <div className="flex items-center gap-1 border-l pl-4">
         <Button
           size="sm"
           variant="outline"
@@ -154,7 +156,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </Button>
       </div>
 
-      <div className="flex items-center space-x-2">
+      {/* Clear Canvas */}
+      <div className="border-l pl-4">
         <Button
           size="sm"
           variant="destructive"

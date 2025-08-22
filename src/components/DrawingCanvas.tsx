@@ -19,7 +19,13 @@ interface DrawingCanvasProps {
   layerId: string;
   width: number;
   height: number;
+  tool: 'select' | 'draw' | 'erase';
+  brushSize: number;
+  brushColor: string;
+  lineStyle: 'solid' | 'dashed' | 'dotted';
   onDrawingChange?: (hasDrawing: boolean) => void;
+  onUndoStackChange?: (stack: string[]) => void;
+  onRedoStackChange?: (stack: string[]) => void;
 }
 
 const colors = [
@@ -32,15 +38,16 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   layerId,
   width,
   height,
+  tool,
+  brushSize,
+  brushColor,
+  lineStyle,
   onDrawingChange,
+  onUndoStackChange,
+  onRedoStackChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
-  const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const [brushSize, setBrushSize] = useState(2);
-  const [brushColor, setBrushColor] = useState('#000000');
-  const [tool, setTool] = useState<'select' | 'draw' | 'erase'>('select');
-  const [lineStyle, setLineStyle] = useState<'solid' | 'dashed' | 'dotted'>('solid');
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const { toast } = useToast();
@@ -67,8 +74,11 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     // Save state for undo/redo
     const saveState = () => {
       const currentState = JSON.stringify(canvas.toJSON());
-      setUndoStack(prev => [...prev.slice(-9), currentState]);
+      const newUndoStack = [...undoStack.slice(-9), currentState];
+      setUndoStack(newUndoStack);
       setRedoStack([]);
+      onUndoStackChange?.(newUndoStack);
+      onRedoStackChange?.([]);
     };
 
     canvas.on('path:created', saveState);
@@ -79,7 +89,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     return () => {
       canvas.dispose();
     };
-  }, [canvasId, layerId, width, height]);
+  }, [canvasId, layerId, width, height, undoStack, onUndoStackChange, onRedoStackChange]);
 
   const loadDrawings = async () => {
     try {
@@ -149,48 +159,50 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       
       if (tool === 'erase') {
         console.log('Configuring eraser mode');
-        // Create a new eraser path that removes existing objects
         canvas.freeDrawingBrush.color = 'rgba(255,255,255,1)';
         
-        // Override the brush methods to use destination-out for erasing
-        const brush = canvas.freeDrawingBrush as any;
-        brush._setBrushStyles = function(ctx: CanvasRenderingContext2D) {
+        // Override the brush to use destination-out for erasing
+        const originalBrush = canvas.freeDrawingBrush;
+        const originalOnMouseDown = originalBrush.onMouseDown;
+        const originalOnMouseMove = originalBrush.onMouseMove;
+        
+        originalBrush.onMouseDown = function(pointer: any) {
+          const ctx = canvas.getContext();
           ctx.globalCompositeOperation = 'destination-out';
-          ctx.strokeStyle = 'rgba(0,0,0,1)';
-          ctx.lineWidth = this.width;
-          ctx.lineCap = this.strokeLineCap;
-          ctx.lineJoin = this.strokeLineJoin;
-          ctx.miterLimit = this.strokeMiterLimit;
+          return originalOnMouseDown.call(this, pointer);
+        };
+        
+        originalBrush.onMouseMove = function(pointer: any) {
+          const ctx = canvas.getContext();
+          ctx.globalCompositeOperation = 'destination-out';
+          return originalOnMouseMove.call(this, pointer);
         };
       } else if (tool === 'draw') {
         console.log('Configuring drawing mode');
         canvas.freeDrawingBrush.color = brushColor;
         
-        // Reset brush styles for normal drawing
-        const brush = canvas.freeDrawingBrush as any;
-        brush._setBrushStyles = function(ctx: CanvasRenderingContext2D) {
+        // Reset brush for normal drawing
+        const originalBrush = canvas.freeDrawingBrush;
+        const originalOnMouseDown = originalBrush.onMouseDown;
+        const originalOnMouseMove = originalBrush.onMouseMove;
+        
+        originalBrush.onMouseDown = function(pointer: any) {
+          const ctx = canvas.getContext();
           ctx.globalCompositeOperation = 'source-over';
-          ctx.strokeStyle = this.color;
-          ctx.lineWidth = this.width;
-          ctx.lineCap = this.strokeLineCap;
-          ctx.lineJoin = this.strokeLineJoin;
-          ctx.miterLimit = this.strokeMiterLimit;
-          
-          // Configure line style for drawing
-          if (this.strokeDashArray && this.strokeDashArray.length) {
-            ctx.setLineDash(this.strokeDashArray);
-          } else {
-            ctx.setLineDash([]);
-          }
+          return originalOnMouseDown.call(this, pointer);
+        };
+        
+        originalBrush.onMouseMove = function(pointer: any) {
+          const ctx = canvas.getContext();
+          ctx.globalCompositeOperation = 'source-over';
+          return originalOnMouseMove.call(this, pointer);
         };
         
         // Configure line style
         const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
-        brush.strokeDashArray = dashArray;
+        (originalBrush as any).strokeDashArray = dashArray;
       }
     }
-
-    setIsDrawingMode(tool === 'draw' || tool === 'erase');
   }, [tool, brushColor, brushSize, lineStyle]);
 
   // Auto-save when drawing changes
