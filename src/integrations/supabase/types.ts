@@ -135,6 +135,33 @@ export type Database = {
           },
         ]
       }
+      drawings: {
+        Row: {
+          canvas_id: string
+          created_at: string
+          drawing_data: Json
+          id: string
+          layer_id: string
+          updated_at: string
+        }
+        Insert: {
+          canvas_id: string
+          created_at?: string
+          drawing_data: Json
+          id?: string
+          layer_id: string
+          updated_at?: string
+        }
+        Update: {
+          canvas_id?: string
+          created_at?: string
+          drawing_data?: Json
+          id?: string
+          layer_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       layers: {
         Row: {
           canvas_id: string
@@ -240,6 +267,54 @@ export type Database = {
           },
         ]
       }
+      pin_templates: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_default: boolean
+          is_public: boolean
+          name: string
+          shape: string
+          size: string
+          style: Json | null
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_default?: boolean
+          is_public?: boolean
+          name: string
+          shape: string
+          size?: string
+          style?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_default?: boolean
+          is_public?: boolean
+          name?: string
+          shape?: string
+          size?: string
+          style?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pins: {
         Row: {
           canvas_id: string
@@ -247,6 +322,7 @@ export type Database = {
           description: string | null
           id: string
           layer_id: string
+          template_id: string | null
           title: string
           updated_at: string
           x: number
@@ -258,6 +334,7 @@ export type Database = {
           description?: string | null
           id?: string
           layer_id: string
+          template_id?: string | null
           title: string
           updated_at?: string
           x: number
@@ -269,6 +346,7 @@ export type Database = {
           description?: string | null
           id?: string
           layer_id?: string
+          template_id?: string | null
           title?: string
           updated_at?: string
           x?: number
@@ -287,6 +365,13 @@ export type Database = {
             columns: ["layer_id"]
             isOneToOne: false
             referencedRelation: "layers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pins_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "pin_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -332,7 +417,17 @@ export type Database = {
         Returns: boolean
       }
       user_has_canvas_access: {
-        Args: { canvas_id: string; user_email: string }
+        Args:
+          | { canvas_id: string; user_email: string }
+          | { canvas_id: string; user_id: string }
+        Returns: boolean
+      }
+      user_has_canvas_access_with_permission: {
+        Args: {
+          canvas_id: string
+          required_permission: string
+          user_id: string
+        }
         Returns: boolean
       }
     }

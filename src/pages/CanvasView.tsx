@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X, Share, Lock, Unlock } from 'lucide-react';
+import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X, Share, Lock, Unlock, Palette, Pen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,9 @@ import { ShareCanvasModal } from '@/components/ShareCanvasModal';
 import { CanvasSettingsModal } from '@/components/CanvasSettingsModal';
 import { EditCanvasNameModal } from '@/components/EditCanvasNameModal';
 import { EditLayerNameModal } from '@/components/EditLayerNameModal';
+import { PinTemplateSelector } from '@/components/PinTemplateSelector';
+import { DrawingCanvas } from '@/components/DrawingCanvas';
+import { PinRenderer } from '@/components/PinRenderer';
 import CanvasBackgroundSelector from '@/components/CanvasBackgroundSelector';
 import LayerColorPicker from '@/components/LayerColorPicker';
 import ImageIcon from '@/components/ui/icons/ImageIcon';
@@ -49,6 +52,19 @@ interface MediaItem {
   name?: string;
 }
 
+interface PinTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  shape: 'circle' | 'square' | 'triangle' | 'star' | 'heart' | 'custom';
+  color: string;
+  size: 'small' | 'medium' | 'large';
+  icon?: string;
+  style?: any;
+  isDefault: boolean;
+  isPublic: boolean;
+}
+
 interface PinData {
   id: string;
   x: number;
@@ -57,6 +73,8 @@ interface PinData {
   description: string;
   layerId: string;
   canvasId: string;
+  templateId?: string;
+  template?: PinTemplate;
   mediaItems?: MediaItem[];
 }
 
@@ -78,12 +96,19 @@ const CanvasView = () => {
   const [isEditCanvasNameModalOpen, setIsEditCanvasNameModalOpen] = useState(false);
   const [isEditLayerNameModalOpen, setIsEditLayerNameModalOpen] = useState(false);
   const [editingLayerId, setEditingLayerId] = useState<string>('');
+  const [isPinTemplateSelectorOpen, setIsPinTemplateSelectorOpen] = useState(false);
+  const [selectedPinTemplate, setSelectedPinTemplate] = useState<PinTemplate | null>(null);
+  const [pinTemplates, setPinTemplates] = useState<PinTemplate[]>([]);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [canvasWidth, setCanvasWidth] = useState(800);
+  const [canvasHeight, setCanvasHeight] = useState(600);
 
   const { toast } = useToast();
 
   useEffect(() => {
     if (id) {
       fetchCanvasData();
+      fetchPinTemplates();
     }
   }, [id]);
 
@@ -138,12 +163,13 @@ const CanvasView = () => {
         setLayers(formattedLayers);
         setSelectedLayerId(formattedLayers[0]?.id || '');
 
-        // 핀 데이터 가져오기
+        // 핀 데이터 가져오기 (템플릿 정보 포함)
         const { data: pinsData, error: pinsError } = await supabase
           .from('pins')
           .select(`
             *,
-            media_items (*)
+            media_items (*),
+            pin_templates (*)
           `)
           .eq('canvas_id', id);
 
@@ -157,6 +183,19 @@ const CanvasView = () => {
           description: pin.description || '',
           layerId: pin.layer_id,
           canvasId: pin.canvas_id,
+          templateId: pin.template_id,
+          template: pin.pin_templates ? {
+            id: pin.pin_templates.id,
+            name: pin.pin_templates.name,
+            description: pin.pin_templates.description,
+            shape: pin.pin_templates.shape as PinTemplate['shape'],
+            color: pin.pin_templates.color,
+            size: pin.pin_templates.size as PinTemplate['size'],
+            icon: pin.pin_templates.icon,
+            style: pin.pin_templates.style,
+            isDefault: pin.pin_templates.is_default,
+            isPublic: pin.pin_templates.is_public,
+          } : undefined,
           mediaItems: pin.media_items?.map((media: any) => ({
             id: media.id,
             type: media.type,
@@ -173,6 +212,46 @@ const CanvasView = () => {
       toast({
         title: "오류",
         description: "캔버스 데이터를 불러올 수 없습니다.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchPinTemplates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pin_templates')
+        .select('*')
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formattedTemplates: PinTemplate[] = data.map(template => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        shape: template.shape as PinTemplate['shape'],
+        color: template.color,
+        size: template.size as PinTemplate['size'],
+        icon: template.icon,
+        style: template.style,
+        isDefault: template.is_default,
+        isPublic: template.is_public,
+      }));
+
+      setPinTemplates(formattedTemplates);
+      
+      // Set default template if none selected
+      if (!selectedPinTemplate) {
+        const defaultTemplate = formattedTemplates.find(t => t.isDefault);
+        setSelectedPinTemplate(defaultTemplate || formattedTemplates[0] || null);
+      }
+    } catch (error) {
+      console.error('Error fetching pin templates:', error);
+      toast({
+        title: "오류",
+        description: "핀 템플릿을 불러올 수 없습니다.",
         variant: "destructive",
       });
     }
@@ -214,6 +293,8 @@ const CanvasView = () => {
   }
 
   const handleCanvasClick = async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDrawingMode) return; // Don't add pins in drawing mode
+    
     if (!selectedLayerId) return;
     
     const selectedLayer = layers.find(l => l.id === selectedLayerId);
@@ -238,6 +319,8 @@ const CanvasView = () => {
       description: '핀 설명을 입력하세요',
       layerId: selectedLayerId,
       canvasId: id || '1',
+      templateId: selectedPinTemplate?.id,
+      template: selectedPinTemplate,
       mediaItems: [],
     };
 
@@ -265,7 +348,8 @@ const CanvasView = () => {
             title: updatedPin.title,
             description: updatedPin.description,
             layer_id: updatedPin.layerId,
-            canvas_id: updatedPin.canvasId
+            canvas_id: updatedPin.canvasId,
+            template_id: updatedPin.templateId
           })
           .select()
           .single();
@@ -294,7 +378,8 @@ const CanvasView = () => {
             y: updatedPin.y,
             title: updatedPin.title,
             description: updatedPin.description,
-            layer_id: updatedPin.layerId
+            layer_id: updatedPin.layerId,
+            template_id: updatedPin.templateId
           })
           .eq('id', updatedPin.id);
 
@@ -686,6 +771,28 @@ const CanvasView = () => {
                 <Badge variant="secondary">
                   선택된 레이어: {layers.find(l => l.id === selectedLayerId)?.name || '없음'}
                 </Badge>
+                <Button
+                  variant={selectedPinTemplate ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setIsPinTemplateSelectorOpen(true)}
+                  className="flex items-center space-x-2"
+                >
+                  <Palette className="w-4 h-4" />
+                  <span className="text-xs">
+                    {selectedPinTemplate ? selectedPinTemplate.name : '핀 템플릿'}
+                  </span>
+                </Button>
+                <Button
+                  variant={isDrawingMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setIsDrawingMode(!isDrawingMode)}
+                  className="flex items-center space-x-2"
+                >
+                  <Pen className="w-4 h-4" />
+                  <span className="text-xs">
+                    {isDrawingMode ? '드로잉 중' : '드로잉'}
+                  </span>
+                </Button>
                 {isOwner && canvas && (
                   <>
                     <CanvasBackgroundSelector
@@ -841,13 +948,13 @@ const CanvasView = () => {
             <div className="text-sm text-muted-foreground bg-blue-50 p-4 rounded-lg">
               <p className="font-medium mb-2">사용법:</p>
               <ul className="space-y-1 text-xs">
+                <li>• 핀 템플릿 버튼으로 핀 모양 선택</li>
+                <li>• 드로잉 버튼으로 펜 드로잉 모드 전환</li>
                 <li>• 레이어를 선택한 후 캔버스를 클릭하여 핀 추가</li>
                 <li>• 눈 아이콘으로 레이어 표시/숨김</li>
                 <li>• 핀을 클릭하여 정보 확인</li>
-                <li>• 핀에 마우스를 올려 미리보기</li>
                 <li>• 휴지통 아이콘으로 레이어 삭제</li>
                 <li>• 공유 아이콘으로 캔버스 공유 (뷰어/편집자 권한 선택 가능)</li>
-                <li>• 공개 공유 시 방문자도 댓글 작성 및 좋아요 가능</li>
                 <li>• 소유자는 설정에서 댓글/좋아요 기능 허용 설정 가능</li>
               </ul>
             </div>
@@ -903,83 +1010,44 @@ const CanvasView = () => {
               )
             )}
             
-            {/* Pins with HoverCard */}
+            {/* Pins */}
             {getVisiblePins().map((pin) => (
-              <HoverCard key={pin.id} openDelay={300} closeDelay={100}>
-                <HoverCardTrigger asChild>
-                  <div
-                    className="absolute w-6 h-6 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform flex items-center justify-center"
-                    style={{
-                      left: pin.x - 12,
-                      top: pin.y - 12,
-                      backgroundColor: getLayerColor(pin.layerId),
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePinClick(pin);
-                    }}
-                  >
-                    <Pin className="w-3 h-3 text-white" />
-                  </div>
-                </HoverCardTrigger>
-                <HoverCardContent className="w-80" side="right" align="start">
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: getLayerColor(pin.layerId) }}
-                      />
-                      <h4 className="font-semibold text-sm">{pin.title}</h4>
-                    </div>
-                    
-                    <div className="text-sm text-muted-foreground">
-                      <p className="whitespace-pre-wrap line-clamp-4">
-                        {pin.description}
-                      </p>
-                    </div>
-
-                    {pin.mediaItems && pin.mediaItems.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">첨부된 미디어:</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {pin.mediaItems.slice(0, 4).map((media, index) => (
-                            <div key={media.id || index} className="relative">
-                              {media.type === 'image' ? (
-                                <img
-                                  src={media.url}
-                                  alt={media.name || `미디어 ${index + 1}`}
-                                  className="w-full h-16 object-cover rounded border"
-                                />
-                              ) : media.type === 'video' ? (
-                                <div className="w-full h-16 bg-gray-100 rounded border flex items-center justify-center">
-                                  <span className="text-xs text-gray-500">동영상</span>
-                                </div>
-                              ) : (
-                                <div className="w-full h-16 bg-blue-50 rounded border flex items-center justify-center">
-                                  <span className="text-xs text-blue-600">링크</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                          {pin.mediaItems.length > 4 && (
-                            <div className="w-full h-16 bg-gray-50 rounded border flex items-center justify-center">
-                              <span className="text-xs text-gray-500">+{pin.mediaItems.length - 4}개 더</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="text-xs text-muted-foreground pt-2 border-t">
-                      클릭하여 자세히 보기
-                    </div>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
+              <PinRenderer
+                key={pin.id}
+                pin={pin}
+                template={pin.template}
+                onClick={() => handlePinClick(pin)}
+                isVisible={true}
+              />
             ))}
+
+            {/* Drawing Canvas - only show in drawing mode or if canvas has drawings */}
+            {(isDrawingMode || selectedLayerId) && selectedLayerId && (
+              <DrawingCanvas
+                canvasId={id || ''}
+                layerId={selectedLayerId}
+                width={canvasWidth}
+                height={canvasHeight}
+                onDrawingChange={(hasDrawing) => {
+                  // Handle drawing state change if needed
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
+
+      {/* Pin Template Selector */}
+      {isPinTemplateSelectorOpen && (
+        <PinTemplateSelector
+          selectedTemplate={selectedPinTemplate}
+          onTemplateSelect={(template) => {
+            setSelectedPinTemplate(template);
+            setIsPinTemplateSelectorOpen(false);
+          }}
+          onClose={() => setIsPinTemplateSelectorOpen(false)}
+        />
+      )}
 
       {/* Pin Info Modal */}
       {canvas && (
