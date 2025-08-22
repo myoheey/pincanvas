@@ -74,11 +74,15 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     // Save state for undo/redo
     const saveState = () => {
       const currentState = JSON.stringify(canvas.toJSON());
-      const newUndoStack = [...undoStack.slice(-9), currentState];
-      setUndoStack(newUndoStack);
-      setRedoStack([]);
-      onUndoStackChange?.(newUndoStack);
-      onRedoStackChange?.([]);
+      setUndoStack(prev => {
+        const newUndoStack = [...prev.slice(-9), currentState];
+        onUndoStackChange?.(newUndoStack);
+        return newUndoStack;
+      });
+      setRedoStack(prev => {
+        onRedoStackChange?.([]);
+        return [];
+      });
     };
 
     canvas.on('path:created', saveState);
@@ -89,7 +93,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     return () => {
       canvas.dispose();
     };
-  }, [canvasId, layerId, width, height, undoStack, onUndoStackChange, onRedoStackChange]);
+  }, [canvasId, layerId, width, height, onUndoStackChange, onRedoStackChange]);
 
   const loadDrawings = async () => {
     try {
@@ -156,9 +160,12 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     // Set drawing mode
     canvas.isDrawingMode = tool === 'draw' || tool === 'erase';
     
+    // Enable object selection for all modes
+    canvas.selection = true;
+    
     if (tool === 'erase') {
       console.log('Configuring eraser mode');
-      // For erasing, create a brush with transparent color during drawing
+      // For erasing, create a fresh brush with transparent color during drawing
       canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
       canvas.freeDrawingBrush.color = 'rgba(0,0,0,0)'; // Transparent during drawing
@@ -184,7 +191,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       
     } else if (tool === 'draw') {
       console.log('Configuring drawing mode with color:', brushColor);
-      // Normal drawing
+      // Create fresh brush for normal drawing - reset any previous overrides
       canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
       canvas.freeDrawingBrush.color = brushColor;
@@ -195,8 +202,14 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
       }
     } else {
-      // Select mode - disable drawing
+      // Select mode - disable drawing but enable selection
       canvas.isDrawingMode = false;
+      canvas.selection = true;
+      // Make all objects selectable
+      canvas.getObjects().forEach(obj => {
+        obj.selectable = true;
+        obj.evented = true;
+      });
     }
     
     console.log('Brush configured:', {
