@@ -167,10 +167,10 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     
     if (tool === 'erase') {
       console.log('Configuring eraser mode');
-      // For erasing, use transparent brush to minimize visual feedback
+      // Configure brush for erasing
       canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
-      canvas.freeDrawingBrush.color = 'rgba(255, 0, 0, 0.2)'; // Very light red for minimal feedback
+      canvas.freeDrawingBrush.color = 'rgba(255, 255, 255, 1)'; // White color for erasing
       
     } else if (tool === 'draw') {
       console.log('Configuring drawing mode with color:', brushColor);
@@ -212,27 +212,26 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     const handlePathCreated = (e: any) => {
       const path = e.path;
       if (path) {
-        // Handle eraser functionality
         if (tool === 'erase') {
           console.log('Eraser path created, applying destination-out');
+          // Set eraser properties directly on the path
           path.globalCompositeOperation = 'destination-out';
           path.set({
-            stroke: 'rgba(0,0,0,1)', // Use opaque black for erasing
-            fill: 'transparent',
-            selectable: false, // Eraser paths should not be selectable
-            evented: false, // Disable events for eraser paths
-            excludeFromExport: true, // Exclude from JSON export
-            visible: false // Hide the eraser path visually but keep the erasing effect
+            stroke: 'rgba(0,0,0,1)', // Use black for erasing
+            fill: '',
+            selectable: false,
+            evented: false,
+            excludeFromExport: true
           });
-          canvas.renderAll();
         } else {
-          // Normal drawing - ensure source-over
+          // Normal drawing paths
           path.globalCompositeOperation = 'source-over';
           path.set({
             selectable: true,
             evented: true
           });
         }
+        canvas.renderAll();
       }
       
       // Auto-save after a delay
