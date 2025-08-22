@@ -182,7 +182,7 @@ const Index = () => {
       <footer className="px-6 py-8 border-t border-white/20">
         <div className="max-w-6xl mx-auto text-center">
           <p className="text-white/60">
-            © 2024 PinCanvas. 모든 권리 보유.
+            © 2025 PinCanvas by Lena
           </p>
         </div>
       </footer>
