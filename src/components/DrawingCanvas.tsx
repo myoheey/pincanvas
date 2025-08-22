@@ -221,15 +221,10 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
             fill: 'transparent',
             selectable: false, // Eraser paths should not be selectable
             evented: false, // Disable events for eraser paths
-            excludeFromExport: true // Exclude from JSON export
+            excludeFromExport: true, // Exclude from JSON export
+            visible: false // Hide the eraser path visually but keep the erasing effect
           });
           canvas.renderAll();
-          
-          // Remove eraser path from canvas objects after a short delay
-          setTimeout(() => {
-            canvas.remove(path);
-            canvas.renderAll();
-          }, 100);
         } else {
           // Normal drawing - ensure source-over
           path.globalCompositeOperation = 'source-over';
