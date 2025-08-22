@@ -189,10 +189,16 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       // Select mode - disable drawing but enable selection
       canvas.isDrawingMode = false;
       canvas.selection = true;
-      // Make all objects selectable
+      // Make all objects selectable except eraser paths
       canvas.getObjects().forEach(obj => {
-        obj.selectable = true;
-        obj.evented = true;
+        if (obj.globalCompositeOperation === 'destination-out') {
+          // Eraser paths should not be selectable
+          obj.selectable = false;
+          obj.evented = false;
+        } else {
+          obj.selectable = true;
+          obj.evented = true;
+        }
       });
     }
     
@@ -213,25 +219,28 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       const path = e.path;
       if (path) {
         if (tool === 'erase') {
-          console.log('Eraser path created, applying destination-out and removing');
-          // Set eraser properties directly on the path
-          path.globalCompositeOperation = 'destination-out';
-          path.set({
-            stroke: 'rgba(0,0,0,1)', // Use black for erasing
-            fill: '',
-            selectable: false,
-            evented: false,
-            excludeFromExport: true
-          });
+          console.log('Eraser path created, checking for intersections');
           
-          // Render the erasing effect
+          // Get all drawable objects (excluding eraser paths)
+          const drawableObjects = canvas.getObjects().filter(obj => 
+            obj.globalCompositeOperation !== 'destination-out' && obj !== path
+          );
+          
+          // Check for intersections and remove intersecting objects
+          const objectsToRemove = [];
+          for (const obj of drawableObjects) {
+            if (path.intersectsWithObject(obj)) {
+              console.log('Intersection found, marking object for removal');
+              objectsToRemove.push(obj);
+            }
+          }
+          
+          // Remove intersecting objects
+          objectsToRemove.forEach(obj => canvas.remove(obj));
+          
+          // Remove the eraser path itself
+          canvas.remove(path);
           canvas.renderAll();
-          
-          // Remove the eraser path immediately after rendering
-          setTimeout(() => {
-            canvas.remove(path);
-            canvas.renderAll();
-          }, 10);
         } else {
           // Normal drawing paths
           path.globalCompositeOperation = 'source-over';
