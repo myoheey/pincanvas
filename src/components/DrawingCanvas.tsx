@@ -158,16 +158,29 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     
     if (tool === 'erase') {
       console.log('Configuring eraser mode');
-      // For erasing, create a brush with destination-out composite operation
+      // For erasing, create a brush with transparent color during drawing
       canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
-      canvas.freeDrawingBrush.color = 'rgba(0,0,0,1)'; // Use black for erasing
+      canvas.freeDrawingBrush.color = 'rgba(0,0,0,0)'; // Transparent during drawing
       
-      // Enable eraser mode if available in Fabric.js v6
+      // Override the _finalizeAndAddPath method to make it erase
       const brush = canvas.freeDrawingBrush as any;
-      if (brush.globalCompositeOperation !== undefined) {
-        brush.globalCompositeOperation = 'destination-out';
-      }
+      const originalFinalize = brush._finalizeAndAddPath;
+      
+      brush._finalizeAndAddPath = function() {
+        // Get the path that was just drawn
+        const path = originalFinalize.call(this);
+        if (path) {
+          // Set the path to use destination-out composite operation for erasing
+          path.globalCompositeOperation = 'destination-out';
+          path.set({
+            stroke: 'rgba(0,0,0,1)', // Use opaque black for actual erasing
+            fill: 'rgba(0,0,0,1)'
+          });
+          canvas.renderAll();
+        }
+        return path;
+      };
       
     } else if (tool === 'draw') {
       console.log('Configuring drawing mode with color:', brushColor);
@@ -176,16 +189,10 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       canvas.freeDrawingBrush.width = brushSize;
       canvas.freeDrawingBrush.color = brushColor;
       
-      // Reset composite operation for normal drawing
-      const brush = canvas.freeDrawingBrush as any;
-      if (brush.globalCompositeOperation !== undefined) {
-        brush.globalCompositeOperation = 'source-over';
-      }
-      
       // Configure line style
       const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
       if (dashArray.length > 0) {
-        (brush as any).strokeDashArray = dashArray;
+        (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
       }
     } else {
       // Select mode - disable drawing
