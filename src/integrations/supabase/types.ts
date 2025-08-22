@@ -53,6 +53,9 @@ export type Database = {
         Row: {
           allow_comments: boolean
           allow_likes: boolean
+          background_color: string | null
+          background_image_url: string | null
+          background_type: string | null
           created_at: string
           id: string
           image_url: string | null
@@ -65,6 +68,9 @@ export type Database = {
         Insert: {
           allow_comments?: boolean
           allow_likes?: boolean
+          background_color?: string | null
+          background_image_url?: string | null
+          background_type?: string | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -77,6 +83,9 @@ export type Database = {
         Update: {
           allow_comments?: boolean
           allow_likes?: boolean
+          background_color?: string | null
+          background_image_url?: string | null
+          background_type?: string | null
           created_at?: string
           id?: string
           image_url?: string | null

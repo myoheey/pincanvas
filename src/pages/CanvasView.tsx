@@ -11,6 +11,7 @@ import { ShareCanvasModal } from '@/components/ShareCanvasModal';
 import { CanvasSettingsModal } from '@/components/CanvasSettingsModal';
 import { EditCanvasNameModal } from '@/components/EditCanvasNameModal';
 import { EditLayerNameModal } from '@/components/EditLayerNameModal';
+import CanvasBackgroundSelector from '@/components/CanvasBackgroundSelector';
 import ImageIcon from '@/components/ui/icons/ImageIcon';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -26,6 +27,9 @@ interface Canvas {
   ownerId: string;
   allowComments: boolean;
   allowLikes: boolean;
+  backgroundType: 'color' | 'image';
+  backgroundColor: string;
+  backgroundImageUrl?: string;
 }
 
 interface Layer {
@@ -106,6 +110,9 @@ const CanvasView = () => {
           ownerId: canvasData.owner_id,
           allowComments: canvasData.allow_comments,
           allowLikes: canvasData.allow_likes,
+          backgroundType: (canvasData.background_type as 'color' | 'image') || 'color',
+          backgroundColor: canvasData.background_color || '#ffffff',
+          backgroundImageUrl: canvasData.background_image_url || undefined,
         });
 
         // 레이어 데이터 가져오기
@@ -568,6 +575,47 @@ const CanvasView = () => {
     }
   };
 
+  const handleBackgroundUpdate = async (type: 'color' | 'image', color?: string, imageUrl?: string) => {
+    try {
+      const updateData: any = { background_type: type };
+      
+      if (type === 'color') {
+        updateData.background_color = color;
+        updateData.background_image_url = null;
+      } else if (type === 'image') {
+        updateData.background_image_url = imageUrl;
+      }
+
+      const { error } = await supabase
+        .from('canvases')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (canvas) {
+        setCanvas({
+          ...canvas,
+          backgroundType: type,
+          backgroundColor: color || canvas.backgroundColor,
+          backgroundImageUrl: type === 'image' ? imageUrl : undefined,
+        });
+      }
+
+      toast({
+        title: "배경 변경 완료",
+        description: "캔버스 배경이 변경되었습니다.",
+      });
+    } catch (error) {
+      console.error('Error updating background:', error);
+      toast({
+        title: "오류",
+        description: "배경 변경 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const isOwner = canvas && user?.id === canvas.ownerId;
 
   return (
@@ -610,12 +658,21 @@ const CanvasView = () => {
                   선택된 레이어: {layers.find(l => l.id === selectedLayerId)?.name || '없음'}
                 </Badge>
                 {isOwner && canvas && (
-                  <CanvasSettingsModal
-                    canvasId={canvas.id}
-                    allowComments={canvas.allowComments}
-                    allowLikes={canvas.allowLikes}
-                    onSettingsUpdate={handleCanvasSettingsUpdate}
-                  />
+                  <>
+                    <CanvasBackgroundSelector
+                      canvasId={canvas.id}
+                      currentBackgroundType={canvas.backgroundType}
+                      currentBackgroundColor={canvas.backgroundColor}
+                      currentBackgroundImageUrl={canvas.backgroundImageUrl}
+                      onBackgroundUpdate={handleBackgroundUpdate}
+                    />
+                    <CanvasSettingsModal
+                      canvasId={canvas.id}
+                      allowComments={canvas.allowComments}
+                      allowLikes={canvas.allowLikes}
+                      onSettingsUpdate={handleCanvasSettingsUpdate}
+                    />
+                  </>
                 )}
                 <Button
                   variant="outline"
@@ -784,10 +841,18 @@ const CanvasView = () => {
 
           <div
             className={`relative bg-white rounded-lg shadow-lg overflow-hidden ${isPresentationMode ? 'w-full h-full cursor-default' : 'cursor-crosshair'}`}
-            style={{ minHeight: '600px' }}
+            style={{ 
+              minHeight: '600px',
+              backgroundColor: canvas.backgroundType === 'color' ? canvas.backgroundColor : '#ffffff',
+              backgroundImage: canvas.backgroundType === 'image' && canvas.backgroundImageUrl ? 
+                `url(${canvas.backgroundImageUrl})` : 'none',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }}
             onClick={isPresentationMode ? undefined : handleCanvasClick}
           >
-            {canvas.imageUrl ? (
+            {canvas.imageUrl && canvas.imageUrl !== '/placeholder.svg' ? (
               <img
                 src={canvas.imageUrl}
                 alt={canvas.title}
@@ -795,16 +860,18 @@ const CanvasView = () => {
                 style={{ minHeight: '600px' }}
               />
             ) : (
-              <div 
-                className="w-full h-full bg-white flex items-center justify-center text-gray-300"
-                style={{ minHeight: '600px' }}
-              >
-                <div className="text-center">
-                  <Image className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                  <p className="text-lg font-medium opacity-40">화이트 캔버스</p>
-                  <p className="text-sm opacity-30">핀을 추가하려면 클릭하세요</p>
+              canvas.backgroundType === 'color' && canvas.backgroundColor === '#ffffff' && (
+                <div 
+                  className="w-full h-full flex items-center justify-center text-gray-300"
+                  style={{ minHeight: '600px' }}
+                >
+                  <div className="text-center">
+                    <Image className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                    <p className="text-lg font-medium opacity-40">화이트 캔버스</p>
+                    <p className="text-sm opacity-30">핀을 추가하려면 클릭하세요</p>
+                  </div>
                 </div>
-              </div>
+              )
             )}
             
             {/* Pins with HoverCard */}
