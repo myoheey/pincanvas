@@ -11,6 +11,8 @@ const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
+  console.log('Index - loading:', loading, 'user:', user);
+
   if (loading) {
     return (
       <div className="min-h-screen gradient-primary flex items-center justify-center">
@@ -66,20 +68,13 @@ const Index = () => {
               PinCanvas는 이미지 위에 핀을 추가하여 아이디어를 정리하고, 
               팀과 실시간으로 협업할 수 있는 시각적 협업 도구입니다.
             </p>
-            <div className="space-x-4">
+            <div className="text-center">
               <Button 
                 size="lg" 
                 className="bg-white text-primary hover:bg-white/90 px-8 py-4 text-lg"
                 onClick={() => navigate('/auth')}
               >
                 무료로 시작하기
-              </Button>
-              <Button 
-                size="lg" 
-                variant="outline" 
-                className="border-white text-white hover:bg-white/10 px-8 py-4 text-lg"
-              >
-                데모 보기
               </Button>
             </div>
           </div>
