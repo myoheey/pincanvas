@@ -213,26 +213,16 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       const path = e.path;
       if (path) {
         if (tool === 'erase') {
-          console.log('Eraser path created, applying destination-out and removing');
-          // Set eraser properties and apply immediately
+          console.log('Eraser path created, applying destination-out');
+          // Set eraser properties directly on the path
           path.globalCompositeOperation = 'destination-out';
           path.set({
-            stroke: 'rgba(0,0,0,1)',
+            stroke: 'rgba(0,0,0,1)', // Use black for erasing
             fill: '',
             selectable: false,
             evented: false,
             excludeFromExport: true
           });
-          
-          // Render the erasing effect first
-          canvas.renderAll();
-          
-          // Then immediately remove the eraser path so it doesn't remain selectable
-          setTimeout(() => {
-            canvas.remove(path);
-            canvas.renderAll();
-          }, 50);
-          
         } else {
           // Normal drawing paths
           path.globalCompositeOperation = 'source-over';
@@ -240,8 +230,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
             selectable: true,
             evented: true
           });
-          canvas.renderAll();
         }
+        canvas.renderAll();
       }
       
       // Auto-save after a delay
