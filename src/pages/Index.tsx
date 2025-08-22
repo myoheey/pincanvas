@@ -11,7 +11,12 @@ const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
-  console.log('Index - loading:', loading, 'user:', user);
+  console.log('Index component render:', { 
+    loading, 
+    hasUser: !!user, 
+    userId: user?.id,
+    currentUrl: window.location.href 
+  });
 
   if (loading) {
     return (
