@@ -26,6 +26,7 @@ interface DrawingCanvasProps {
   onDrawingChange?: (hasDrawing: boolean) => void;
   onUndoStackChange?: (stack: string[]) => void;
   onRedoStackChange?: (stack: string[]) => void;
+  onDeleteSelected?: () => void;
 }
 
 const colors = [
@@ -45,6 +46,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   onDrawingChange,
   onUndoStackChange,
   onRedoStackChange,
+  onDeleteSelected,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
@@ -165,10 +167,10 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     
     if (tool === 'erase') {
       console.log('Configuring eraser mode');
-      // For erasing, use normal drawing but handle the path in path:created event
+      // For erasing, use transparent brush to minimize visual feedback
       canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
-      canvas.freeDrawingBrush.color = brushColor; // Use visible color for feedback
+      canvas.freeDrawingBrush.color = 'rgba(255, 0, 0, 0.2)'; // Very light red for minimal feedback
       
     } else if (tool === 'draw') {
       console.log('Configuring drawing mode with color:', brushColor);
@@ -216,12 +218,18 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
           path.globalCompositeOperation = 'destination-out';
           path.set({
             stroke: 'rgba(0,0,0,1)', // Use opaque black for erasing
-            fill: 'transparent'
+            fill: 'transparent',
+            selectable: false, // Eraser paths should not be selectable
+            evented: false // Disable events for eraser paths
           });
           canvas.renderAll();
         } else {
           // Normal drawing - ensure source-over
           path.globalCompositeOperation = 'source-over';
+          path.set({
+            selectable: true,
+            evented: true
+          });
         }
       }
       
@@ -279,6 +287,56 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       canvas.renderAll();
     });
   };
+
+  const deleteSelected = () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const activeObjects = canvas.getActiveObjects();
+    if (activeObjects.length > 0) {
+      activeObjects.forEach(obj => canvas.remove(obj));
+      canvas.discardActiveObject();
+      canvas.renderAll();
+      
+      // Save state for undo/redo
+      const currentState = JSON.stringify(canvas.toJSON());
+      setUndoStack(prev => {
+        const newUndoStack = [...prev.slice(-9), currentState];
+        onUndoStackChange?.(newUndoStack);
+        return newUndoStack;
+      });
+      setRedoStack(prev => {
+        onRedoStackChange?.([]);
+        return [];
+      });
+      
+      // Auto-save
+      setTimeout(() => saveDrawing(), 100);
+    }
+  };
+
+  // Handle keyboard shortcuts and expose delete function
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        deleteSelected();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Expose deleteSelected function to parent
+    if (onDeleteSelected) {
+      (window as any).deleteSelectedDrawing = deleteSelected;
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if ((window as any).deleteSelectedDrawing) {
+        delete (window as any).deleteSelectedDrawing;
+      }
+    };
+  }, [onDeleteSelected]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">

@@ -870,6 +870,12 @@ const CanvasView = () => {
                   undo={undo}
                   redo={redo}
                   clearCanvas={clearCanvas}
+                  deleteSelected={() => {
+                    // Call the exposed delete function from DrawingCanvas
+                    if ((window as any).deleteSelectedDrawing) {
+                      (window as any).deleteSelectedDrawing();
+                    }
+                  }}
                   isVisible={true}
                 />
               </div>
@@ -1091,6 +1097,12 @@ const CanvasView = () => {
                 }}
                 onUndoStackChange={setUndoStack}
                 onRedoStackChange={setRedoStack}
+                onDeleteSelected={() => {
+                  // Call the exposed delete function from DrawingCanvas
+                  if ((window as any).deleteSelectedDrawing) {
+                    (window as any).deleteSelectedDrawing();
+                  }
+                }}
               />
             )}
           </div>

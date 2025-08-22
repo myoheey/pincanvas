@@ -24,6 +24,7 @@ interface DrawingToolbarProps {
   undo: () => void;
   redo: () => void;
   clearCanvas: () => void;
+  deleteSelected?: () => void;
   isVisible: boolean;
 }
 
@@ -46,6 +47,7 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   undo,
   redo,
   clearCanvas,
+  deleteSelected,
   isVisible,
 }) => {
   if (!isVisible) return null;
@@ -156,12 +158,23 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </Button>
       </div>
 
-      {/* Clear Canvas */}
-      <div className="border-l pl-4">
+      {/* Clear Canvas and Delete Selected */}
+      <div className="border-l pl-4 flex items-center gap-1">
+        {tool === 'select' && deleteSelected && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={deleteSelected}
+            title="선택된 객체 삭제"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        )}
         <Button
           size="sm"
           variant="destructive"
           onClick={clearCanvas}
+          title="전체 지우기"
         >
           <Trash2 className="w-4 h-4" />
         </Button>
