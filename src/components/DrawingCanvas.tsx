@@ -10,7 +10,7 @@ interface DrawingCanvasProps {
   tool: 'select' | 'draw' | 'erase';
   brushSize: number;
   brushColor: string;
-  lineStyle: 'solid' | 'dashed' | 'dotted';
+  lineStyle: 'solid' | 'dashed';
   zoom: number;
   panX: number;
   panY: number;
@@ -55,8 +55,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     const { width, height } = container.getBoundingClientRect();
     
     const canvas = new FabricCanvas(canvasRef.current, {
-      width: Math.max(width, 1200), // Minimum canvas size
-      height: Math.max(height, 800),
+      width: Math.max(window.innerWidth * 2, 3000),
+      height: Math.max(window.innerHeight * 2, 2000),
       backgroundColor: 'transparent',
     });
 
@@ -97,8 +97,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       if (container) {
         const { width: newWidth, height: newHeight } = container.getBoundingClientRect();
         canvas.setDimensions({
-          width: Math.max(newWidth, 1200),
-          height: Math.max(newHeight, 800)
+          width: Math.max(newWidth * 2, 3000),
+          height: Math.max(newHeight * 2, 2000)
         });
       }
     });
@@ -204,7 +204,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       canvas.freeDrawingBrush.color = brushColor;
       
       // Configure line style
-      const dashArray = lineStyle === 'dashed' ? [5, 5] : lineStyle === 'dotted' ? [2, 2] : [];
+      const dashArray = lineStyle === 'dashed' ? [5, 5] : [];
       if (dashArray.length > 0) {
         (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
       }

@@ -17,8 +17,8 @@ interface DrawingToolbarProps {
   setBrushSize: (size: number) => void;
   brushColor: string;
   setBrushColor: (color: string) => void;
-  lineStyle: 'solid' | 'dashed' | 'dotted';
-  setLineStyle: (style: 'solid' | 'dashed' | 'dotted') => void;
+  lineStyle: 'solid' | 'dashed';
+  setLineStyle: (style: 'solid' | 'dashed') => void;
   undoStack: string[];
   redoStack: string[];
   undo: () => void;
@@ -30,7 +30,9 @@ interface DrawingToolbarProps {
 
 const colors = [
   '#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', 
-  '#FF00FF', '#00FFFF', '#FFA500', '#800080', '#008000'
+  '#FF00FF', '#00FFFF', '#FFA500', '#800080', '#008000',
+  // 하이라이트 색상 추가
+  '#FFFF00AA', '#00FF00AA', '#FF00FFAA', '#00FFFF55', '#FFA50055'
 ];
 
 export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
@@ -121,14 +123,13 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           <div className="flex gap-1">
             {[
               { key: 'solid', label: '실선' },
-              { key: 'dashed', label: '점선' },
-              { key: 'dotted', label: '점선2' }
+              { key: 'dashed', label: '점선' }
             ].map((style) => (
               <Button
                 key={style.key}
                 size="sm"
                 variant={lineStyle === style.key ? 'default' : 'outline'}
-                onClick={() => setLineStyle(style.key as 'solid' | 'dashed' | 'dotted')}
+                onClick={() => setLineStyle(style.key as 'solid' | 'dashed')}
                 className="text-xs px-2 py-1"
               >
                 {style.label}

@@ -11,6 +11,7 @@ import { ShareCanvasModal } from '@/components/ShareCanvasModal';
 import { CanvasSettingsModal } from '@/components/CanvasSettingsModal';
 import { EditCanvasNameModal } from '@/components/EditCanvasNameModal';
 import { EditLayerNameModal } from '@/components/EditLayerNameModal';
+import { LayerDuplicateModal } from '@/components/LayerDuplicateModal';
 import { PinTemplateSelector } from '@/components/PinTemplateSelector';
 import { DrawingCanvas } from '@/components/DrawingCanvas';
 import { DrawingToolbar } from '@/components/DrawingToolbar';
@@ -106,6 +107,8 @@ const CanvasView = () => {
   const [isEditLayerNameModalOpen, setIsEditLayerNameModalOpen] = useState(false);
   const [editingLayerId, setEditingLayerId] = useState<string>('');
   const [isPinTemplateSelectorOpen, setIsPinTemplateSelectorOpen] = useState(false);
+  const [isDuplicateLayerModalOpen, setIsDuplicateLayerModalOpen] = useState(false);
+  const [duplicatingLayerId, setDuplicatingLayerId] = useState<string>('');
   
   // Pin template state
   const [selectedPinTemplate, setSelectedPinTemplate] = useState<PinTemplate | null>(null);
@@ -117,7 +120,7 @@ const CanvasView = () => {
   const [drawingTool, setDrawingTool] = useState<'select' | 'draw' | 'erase'>('select');
   const [brushSize, setBrushSize] = useState(2);
   const [brushColor, setBrushColor] = useState('#000000');
-  const [lineStyle, setLineStyle] = useState<'solid' | 'dashed' | 'dotted'>('solid');
+  const [lineStyle, setLineStyle] = useState<'solid' | 'dashed'>('solid');
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   
@@ -1101,6 +1104,21 @@ const CanvasView = () => {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="w-8 h-8 text-blue-500 hover:text-blue-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDuplicatingLayerId(layer.id);
+                                setIsDuplicateLayerModalOpen(true);
+                              }}
+                              title="레이어 복제"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="w-8 h-8 text-red-500 hover:text-red-700"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1303,6 +1321,15 @@ const CanvasView = () => {
         onClose={() => setIsEditLayerNameModalOpen(false)}
         currentName={layers.find(l => l.id === editingLayerId)?.name || ''}
         onSubmit={handleLayerNameUpdate}
+      />
+
+      {/* Layer Duplicate Modal */}
+      <LayerDuplicateModal
+        isOpen={isDuplicateLayerModalOpen}
+        onClose={() => setIsDuplicateLayerModalOpen(false)}
+        layerId={duplicatingLayerId}
+        layerName={layers.find(l => l.id === duplicatingLayerId)?.name || ''}
+        canvasId={id || ''}
       />
     </div>
   );
