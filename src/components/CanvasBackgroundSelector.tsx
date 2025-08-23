@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Palette, Image } from 'lucide-react';
+import { Palette, Image, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface CanvasBackgroundSelectorProps {
   canvasId: string;
@@ -24,6 +26,7 @@ const CanvasBackgroundSelector = ({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState(currentBackgroundColor);
   const [imageUrl, setImageUrl] = useState(currentBackgroundImageUrl || '');
+  const [isUploading, setIsUploading] = useState(false);
 
   const presetColors = [
     '#ffffff', '#f8fafc', '#f1f5f9', '#e2e8f0', '#cbd5e1',
@@ -46,6 +49,48 @@ const CanvasBackgroundSelector = ({
     if (imageUrl.trim()) {
       onBackgroundUpdate('image', undefined, imageUrl.trim());
       setIsOpen(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드 가능합니다.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      toast.error('파일 크기는 10MB 이하여야 합니다.');
+      return;
+    }
+
+    setIsUploading(true);
+    
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `${canvasId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('canvas-backgrounds')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('canvas-backgrounds')
+        .getPublicUrl(filePath);
+
+      onBackgroundUpdate('image', undefined, data.publicUrl);
+      setIsOpen(false);
+      toast.success('배경 이미지가 업로드되었습니다.');
+    } catch (error) {
+      console.error('File upload error:', error);
+      toast.error('이미지 업로드에 실패했습니다.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -116,6 +161,26 @@ const CanvasBackgroundSelector = ({
           </TabsContent>
           
           <TabsContent value="image" className="space-y-4">
+            <div>
+              <Label htmlFor="file-upload">이미지 파일 업로드</Label>
+              <div className="mt-2">
+                <Input
+                  id="file-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={isUploading}
+                  className="w-full"
+                />
+                {isUploading && (
+                  <p className="text-xs text-primary mt-1">업로드 중...</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  JPG, PNG 등의 이미지 파일을 업로드할 수 있습니다. (최대 10MB)
+                </p>
+              </div>
+            </div>
+
             <div>
               <Label htmlFor="image-url">이미지 URL</Label>
               <div className="flex gap-2 mt-2">
