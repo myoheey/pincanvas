@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Eye, EyeOff, Edit, Trash2, Layers, Pin, Image, Presentation, X, Share, Lock, Unlock, Palette, Pen, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -113,8 +113,6 @@ const CanvasView = () => {
   
   // Drawing states
   const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const [canvasWidth, setCanvasWidth] = useState(800);
-  const [canvasHeight, setCanvasHeight] = useState(600);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [drawingTool, setDrawingTool] = useState<'select' | 'draw' | 'erase'>('select');
   const [brushSize, setBrushSize] = useState(2);
@@ -123,10 +121,55 @@ const CanvasView = () => {
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   
-  // Drawing functions (placeholder - will be connected to actual canvas)
-  const undo = () => console.log('Undo');
-  const redo = () => console.log('Redo');
-  const clearCanvas = () => console.log('Clear canvas');
+  // Zoom and pan states
+  const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
+  
+  // Canvas container reference
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  
+  // Handle mouse events for zoom/pan
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey) {
+      // Start panning
+      setIsDragging(true);
+      setLastPanPoint({ x: e.clientX, y: e.clientY });
+    } else if (!isDrawingMode) {
+      handleCanvasClick(e);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging && (e.ctrlKey || e.metaKey)) {
+      const deltaX = e.clientX - lastPanPoint.x;
+      const deltaY = e.clientY - lastPanPoint.y;
+      setPanX(prev => prev + deltaX);
+      setPanY(prev => prev + deltaY);
+      setLastPanPoint({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom(prev => Math.max(0.1, Math.min(3, prev * zoomFactor)));
+    }
+  };
+
+  // Reset zoom and pan
+  const resetView = () => {
+    setZoom(1);
+    setPanX(0);
+    setPanY(0);
+  };
 
   useEffect(() => {
     if (id) {
@@ -403,6 +446,25 @@ const CanvasView = () => {
     setSelectedPin(newPin);
     setIsCreatingNewPin(true);
     setIsPinModalOpen(true);
+  };
+
+  // Drawing canvas functions (these will be connected to the actual DrawingCanvas component)
+  const undo = () => {
+    if ((window as any).undoDrawing) {
+      (window as any).undoDrawing();
+    }
+  };
+
+  const redo = () => {
+    if ((window as any).redoDrawing) {
+      (window as any).redoDrawing();
+    }
+  };
+
+  const clearCanvas = () => {
+    if ((window as any).clearDrawingCanvas) {
+      (window as any).clearDrawingCanvas();
+    }
   };
 
   const handlePinClick = (pin: PinData) => {
@@ -1091,6 +1153,7 @@ const CanvasView = () => {
           )}
 
           <div
+            ref={canvasContainerRef}
             id="main-canvas"
             className={`relative bg-white rounded-lg shadow-lg overflow-hidden ${isPresentationMode ? 'w-full h-full cursor-default' : 'cursor-crosshair'}`}
             style={{ 
@@ -1102,8 +1165,19 @@ const CanvasView = () => {
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat'
             }}
-            onClick={isPresentationMode ? undefined : handleCanvasClick}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onWheel={handleWheel}
           >
+            <div
+              className="w-full h-full relative"
+              style={{
+                transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
+                transformOrigin: '0 0',
+                minHeight: '600px'
+              }}
+            >
             {canvas.imageUrl && canvas.imageUrl !== '/placeholder.svg' ? (
               <img
                 src={canvas.imageUrl}
@@ -1143,12 +1217,14 @@ const CanvasView = () => {
               <DrawingCanvas
                 canvasId={id || ''}
                 layerId={selectedLayerId}
-                width={canvasWidth}
-                height={canvasHeight}
+                containerRef={canvasContainerRef}
                 tool={drawingTool}
                 brushSize={brushSize}
                 brushColor={brushColor}
                 lineStyle={lineStyle}
+                zoom={zoom}
+                panX={panX}
+                panY={panY}
                 onDrawingChange={() => {
                   // Drawing change handler - removed problematic layer state update
                 }}
@@ -1162,6 +1238,7 @@ const CanvasView = () => {
                 }}
               />
             )}
+            </div>
           </div>
         </div>
       </div>

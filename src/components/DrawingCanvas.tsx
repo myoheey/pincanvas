@@ -1,28 +1,19 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Canvas as FabricCanvas, PencilBrush } from 'fabric';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { 
-  Pen, 
-  Eraser, 
-  Undo, 
-  Redo, 
-  Trash2, 
-  MousePointer,
-  X
-} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface DrawingCanvasProps {
   canvasId: string;
   layerId: string;
-  width: number;
-  height: number;
+  containerRef: React.RefObject<HTMLDivElement>;
   tool: 'select' | 'draw' | 'erase';
   brushSize: number;
   brushColor: string;
   lineStyle: 'solid' | 'dashed' | 'dotted';
+  zoom: number;
+  panX: number;
+  panY: number;
   onDrawingChange?: (hasDrawing: boolean) => void;
   onUndoStackChange?: (stack: string[]) => void;
   onRedoStackChange?: (stack: string[]) => void;
@@ -37,12 +28,14 @@ const colors = [
 export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   canvasId,
   layerId,
-  width,
-  height,
+  containerRef,
   tool,
   brushSize,
   brushColor,
   lineStyle,
+  zoom,
+  panX,
+  panY,
   onDrawingChange,
   onUndoStackChange,
   onRedoStackChange,
@@ -54,15 +47,22 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const { toast } = useToast();
 
+  // Initialize and setup canvas
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !containerRef.current) return;
 
+    const container = containerRef.current;
+    const { width, height } = container.getBoundingClientRect();
+    
     const canvas = new FabricCanvas(canvasRef.current, {
-      width,
-      height,
+      width: Math.max(width, 1200), // Minimum canvas size
+      height: Math.max(height, 800),
       backgroundColor: 'transparent',
     });
 
+    // Enable zoom and pan functionality
+    canvas.allowTouchScrolling = true;
+    
     // Configure drawing brush
     canvas.freeDrawingBrush = new PencilBrush(canvas);
     canvas.freeDrawingBrush.color = brushColor;
@@ -92,10 +92,34 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     canvas.on('object:removed', saveState);
     canvas.on('object:modified', saveState);
 
+    // Handle canvas resize
+    const resizeObserver = new ResizeObserver(() => {
+      if (container) {
+        const { width: newWidth, height: newHeight } = container.getBoundingClientRect();
+        canvas.setDimensions({
+          width: Math.max(newWidth, 1200),
+          height: Math.max(newHeight, 800)
+        });
+      }
+    });
+
+    resizeObserver.observe(container);
+
     return () => {
+      resizeObserver.disconnect();
       canvas.dispose();
     };
-  }, [canvasId, layerId, width, height, onUndoStackChange, onRedoStackChange]);
+  }, [canvasId, layerId, containerRef, onUndoStackChange, onRedoStackChange]);
+
+  // Update viewport transform when zoom/pan changes
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    // Apply zoom and pan transformation
+    canvas.setViewportTransform([zoom, 0, 0, zoom, panX, panY]);
+    canvas.renderAll();
+  }, [zoom, panX, panY]);
 
   const loadDrawings = async () => {
     try {
@@ -359,7 +383,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
 
   return (
     <div className="absolute inset-0 pointer-events-none">
-      {/* Drawing Canvas - always visible */}
+      {/* Drawing Canvas - responsive to container */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 pointer-events-auto"
