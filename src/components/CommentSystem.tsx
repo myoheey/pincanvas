@@ -65,8 +65,15 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
   }, [pinId, canvasId, user]);
 
   const checkEmailPermissions = async () => {
-    if (!user || isOwner) {
-      setCanSeeEmails(isOwner);
+    // Anonymous users never see emails
+    if (!user) {
+      setCanSeeEmails(false);
+      return;
+    }
+    
+    // Canvas owners can always see emails
+    if (isOwner) {
+      setCanSeeEmails(true);
       return;
     }
 
