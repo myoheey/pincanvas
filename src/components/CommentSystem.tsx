@@ -64,14 +64,6 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
     }
   }, [pinId, canvasId, user]);
 
-  // Re-fetch data when email permissions change to apply proper filtering
-  useEffect(() => {
-    if (canSeeEmails !== undefined) {
-      fetchComments();
-      fetchLikes();
-    }
-  }, [canSeeEmails]);
-
   const checkEmailPermissions = async () => {
     // Anonymous users never see emails
     if (!user) {
@@ -105,7 +97,7 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
     if (!allowComments) return;
     
     const { data, error } = await supabase
-      .from('comments')
+      .from('secure_comments')
       .select('*')
       .eq('pin_id', pinId)
       .order('created_at', { ascending: true });
@@ -113,17 +105,7 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
     if (error) {
       console.error('Error fetching comments:', error);
     } else {
-      // Immediately filter out emails for unauthorized users
-      const filteredComments = (data || []).map(comment => ({
-        id: comment.id,
-        content: comment.content,
-        author_name: comment.author_name,
-        author_email: canSeeEmails ? comment.author_email : undefined,
-        created_at: comment.created_at,
-        updated_at: comment.updated_at
-      }));
-      
-      setComments(filteredComments);
+      setComments(data || []);
     }
   };
 
@@ -131,32 +113,27 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
     if (!allowLikes) return;
     
     const { data, error } = await supabase
-      .from('likes')
+      .from('secure_likes')
       .select('*')
       .eq('pin_id', pinId);
 
     if (error) {
       console.error('Error fetching likes:', error);
     } else {
-      // Immediately filter out emails for unauthorized users
-      const filteredLikes = (data || []).map(like => ({
-        id: like.id,
-        pin_id: like.pin_id,
-        author_name: like.author_name,
-        author_email: canSeeEmails ? like.author_email : undefined,
-        created_at: like.created_at
-      }));
-      
-      setLikes(filteredLikes);
+      setLikes(data || []);
       
       // Check if current user liked this pin
       const userEmail = user?.email;
-      if (userEmail && canSeeEmails) {
-        setIsLiked(data?.some(like => like.author_email === userEmail) || false);
-      } else if (userEmail) {
-        // For public access, check by comparing author_name as fallback
-        const userName = userEmail.split('@')[0];
-        setIsLiked(data?.some(like => like.author_name === userName) || false);
+      if (userEmail) {
+        // Try email matching first (if available in secure view)
+        const emailMatch = data?.some(like => like.author_email === userEmail);
+        if (emailMatch) {
+          setIsLiked(true);
+        } else {
+          // Fallback to name matching for anonymous users
+          const userName = userEmail.split('@')[0];
+          setIsLiked(data?.some(like => like.author_name === userName) || false);
+        }
       }
     }
   };
