@@ -272,8 +272,8 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="viewer">뷰어</SelectItem>
-                    <SelectItem value="editor">편집자</SelectItem>
+                    <SelectItem value="viewer">뷰어 (보기만 가능)</SelectItem>
+                    <SelectItem value="editor">편집자 (로그인 없이도 편집 가능)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -293,6 +293,12 @@ export const ShareCanvasModal: React.FC<ShareCanvasModalProps> = ({
                   <Copy className="w-4 h-4" />
                 </Button>
               </div>
+              
+              {publicPermission === 'editor' && (
+                <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
+                  💡 편집자 권한으로 설정되어 있어, 링크를 받은 사람은 로그인 없이도 캔버스를 편집할 수 있습니다.
+                </div>
+              )}
             </div>
           )}
 
