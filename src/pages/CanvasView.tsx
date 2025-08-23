@@ -183,13 +183,13 @@ const CanvasView = () => {
   }, [id, user]);
 
   const checkUserPermission = async () => {
-    if (!user || !id) {
+    if (!id) {
       setUserPermission(null);
       return;
     }
 
     try {
-      // Check if user is the owner
+      // Get canvas data first
       const { data: canvasData, error: canvasError } = await supabase
         .from('canvases')
         .select('owner_id, is_public, public_permission')
@@ -198,31 +198,42 @@ const CanvasView = () => {
 
       if (canvasError) throw canvasError;
 
-      if (canvasData.owner_id === user.id) {
-        setUserPermission('owner');
-        return;
-      }
+      // If user is logged in, check ownership and share permissions
+      if (user) {
+        // Check if user is the owner
+        if (canvasData.owner_id === user.id) {
+          setUserPermission('owner');
+          return;
+        }
 
-      // Check if canvas is public
-      if (canvasData.is_public) {
-        setUserPermission(canvasData.public_permission as 'viewer' | 'editor');
-        return;
-      }
+        // Check if canvas is public
+        if (canvasData.is_public) {
+          setUserPermission(canvasData.public_permission as 'viewer' | 'editor');
+          return;
+        }
 
-      // Check if user has explicit share permission
-      const { data: shareData, error: shareError } = await supabase
-        .from('canvas_shares')
-        .select('permission')
-        .eq('canvas_id', id)
-        .eq('shared_with_email', user.email)
-        .single();
+        // Check if user has explicit share permission
+        const { data: shareData, error: shareError } = await supabase
+          .from('canvas_shares')
+          .select('permission')
+          .eq('canvas_id', id)
+          .eq('shared_with_email', user.email)
+          .single();
 
-      if (shareError && shareError.code !== 'PGRST116') throw shareError;
+        if (shareError && shareError.code !== 'PGRST116') throw shareError;
 
-      if (shareData) {
-        setUserPermission(shareData.permission as 'viewer' | 'editor');
+        if (shareData) {
+          setUserPermission(shareData.permission as 'viewer' | 'editor');
+        } else {
+          setUserPermission('viewer'); // Default to viewer if no explicit permission
+        }
       } else {
-        setUserPermission('viewer'); // Default to viewer if no explicit permission
+        // Anonymous user - only check if canvas is public
+        if (canvasData.is_public) {
+          setUserPermission(canvasData.public_permission as 'viewer' | 'editor');
+        } else {
+          setUserPermission(null); // No access for anonymous users on private canvases
+        }
       }
     } catch (error) {
       console.error('Error checking user permission:', error);
