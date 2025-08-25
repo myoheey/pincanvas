@@ -88,34 +88,40 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
   panY = 0,
   browserZoom = 1,
 }) => {
-  // Try to find template in hardcoded templates if not provided
-  let displayTemplate = template;
-  if (pin.templateId && !template) {
-    // Check if it's a hardcoded template
-    const hardcodedTemplates = [
-      { id: 'default-circle', name: '원형', shape: 'circle', color: '#3b82f6', size: 'medium', isDefault: true, isPublic: true },
-      { id: 'default-square', name: '사각형', shape: 'square', color: '#10b981', size: 'medium', isDefault: true, isPublic: true },
-      { id: 'default-triangle', name: '삼각형', shape: 'triangle', color: '#f59e0b', size: 'medium', isDefault: true, isPublic: true },
-      { id: 'default-star', name: '별', shape: 'star', color: '#ef4444', size: 'medium', isDefault: true, isPublic: true },
-      { id: 'custom-1', name: 'Custom 1', shape: 'custom', imageUrl: '/images/Custom1.png', color: '#ff0000', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-2', name: 'Custom 2', shape: 'custom', imageUrl: '/images/Custom2.png', color: '#00ff00', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-3', name: 'Custom 3', shape: 'custom', imageUrl: '/images/Custom3.png', color: '#0000ff', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-4', name: 'Custom 4', shape: 'custom', imageUrl: '/images/Custom4.png', color: '#ffff00', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-5', name: 'Custom 5', shape: 'custom', imageUrl: '/images/Custom5.png', color: '#ff00ff', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-6', name: 'Custom 6', shape: 'custom', imageUrl: '/images/Custom6.png', color: '#00ffff', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-7', name: 'Custom 7', shape: 'custom', imageUrl: '/images/Custom7.png', color: '#ff8800', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-8', name: 'Custom 8', shape: 'custom', imageUrl: '/images/Custom8.png', color: '#88ff00', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-9', name: 'Custom 9', shape: 'custom', imageUrl: '/images/Custom9.png', color: '#0088ff', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-10', name: 'Custom 10', shape: 'custom', imageUrl: '/images/Custom10.png', color: '#ff0088', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-11', name: 'Custom 11', shape: 'custom', imageUrl: '/images/Custom11.png', color: '#88ff88', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-12', name: 'Custom 12', shape: 'custom', imageUrl: '/images/Custom12.png', color: '#8888ff', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-13', name: 'Custom 13', shape: 'custom', imageUrl: '/images/Custom13.png', color: '#ff8888', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-14', name: 'Custom 14', shape: 'custom', imageUrl: '/images/Custom14.png', color: '#88ffff', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-15', name: 'Custom 15', shape: 'custom', imageUrl: '/images/Custom15.png', color: '#ffff88', size: 'medium', isDefault: false, isPublic: true },
-      { id: 'custom-16', name: 'Custom 16', shape: 'custom', imageUrl: '/images/Custom16.png', color: '#ff88ff', size: 'medium', isDefault: false, isPublic: true },
-    ];
+  // 하드코딩된 템플릿 ID를 매핑하는 함수
+  const getHardcodedTemplate = (templateId: string): PinTemplate | null => {
+    const hardcodedTemplates: Record<string, PinTemplate> = {
+      'default-circle': { id: 'default-circle', name: '원형', shape: 'circle', color: '#3b82f6', size: 'medium', isDefault: true, isPublic: true },
+      'default-square': { id: 'default-square', name: '사각형', shape: 'square', color: '#10b981', size: 'medium', isDefault: true, isPublic: true },
+      'default-triangle': { id: 'default-triangle', name: '삼각형', shape: 'triangle', color: '#f59e0b', size: 'medium', isDefault: true, isPublic: true },
+      'default-star': { id: 'default-star', name: '별', shape: 'star', color: '#ef4444', size: 'medium', isDefault: true, isPublic: true },
+      'custom-1': { id: 'custom-1', name: 'Custom 1', shape: 'custom', imageUrl: '/images/Custom1.png', color: '#ff0000', size: 'medium', isDefault: false, isPublic: true },
+      'custom-2': { id: 'custom-2', name: 'Custom 2', shape: 'custom', imageUrl: '/images/Custom2.png', color: '#00ff00', size: 'medium', isDefault: false, isPublic: true },
+      'custom-3': { id: 'custom-3', name: 'Custom 3', shape: 'custom', imageUrl: '/images/Custom3.png', color: '#0000ff', size: 'medium', isDefault: false, isPublic: true },
+      'custom-4': { id: 'custom-4', name: 'Custom 4', shape: 'custom', imageUrl: '/images/Custom4.png', color: '#ffff00', size: 'medium', isDefault: false, isPublic: true },
+      'custom-5': { id: 'custom-5', name: 'Custom 5', shape: 'custom', imageUrl: '/images/Custom5.png', color: '#ff00ff', size: 'medium', isDefault: false, isPublic: true },
+      'custom-6': { id: 'custom-6', name: 'Custom 6', shape: 'custom', imageUrl: '/images/Custom6.png', color: '#00ffff', size: 'medium', isDefault: false, isPublic: true },
+      'custom-7': { id: 'custom-7', name: 'Custom 7', shape: 'custom', imageUrl: '/images/Custom7.png', color: '#ff8800', size: 'medium', isDefault: false, isPublic: true },
+      'custom-8': { id: 'custom-8', name: 'Custom 8', shape: 'custom', imageUrl: '/images/Custom8.png', color: '#88ff00', size: 'medium', isDefault: false, isPublic: true },
+      'custom-9': { id: 'custom-9', name: 'Custom 9', shape: 'custom', imageUrl: '/images/Custom9.png', color: '#0088ff', size: 'medium', isDefault: false, isPublic: true },
+      'custom-10': { id: 'custom-10', name: 'Custom 10', shape: 'custom', imageUrl: '/images/Custom10.png', color: '#ff0088', size: 'medium', isDefault: false, isPublic: true },
+      'custom-11': { id: 'custom-11', name: 'Custom 11', shape: 'custom', imageUrl: '/images/Custom11.png', color: '#88ff88', size: 'medium', isDefault: false, isPublic: true },
+      'custom-12': { id: 'custom-12', name: 'Custom 12', shape: 'custom', imageUrl: '/images/Custom12.png', color: '#8888ff', size: 'medium', isDefault: false, isPublic: true },
+      'custom-13': { id: 'custom-13', name: 'Custom 13', shape: 'custom', imageUrl: '/images/Custom13.png', color: '#ff8888', size: 'medium', isDefault: false, isPublic: true },
+      'custom-14': { id: 'custom-14', name: 'Custom 14', shape: 'custom', imageUrl: '/images/Custom14.png', color: '#88ffff', size: 'medium', isDefault: false, isPublic: true },
+      'custom-15': { id: 'custom-15', name: 'Custom 15', shape: 'custom', imageUrl: '/images/Custom15.png', color: '#ffff88', size: 'medium', isDefault: false, isPublic: true },
+      'custom-16': { id: 'custom-16', name: 'Custom 16', shape: 'custom', imageUrl: '/images/Custom16.png', color: '#ff88ff', size: 'medium', isDefault: false, isPublic: true },
+    };
     
-    displayTemplate = hardcodedTemplates.find(t => t.id === pin.templateId) as PinTemplate || null;
+    return hardcodedTemplates[templateId] || null;
+  };
+
+  // 템플릿 결정 로직 - 하드코딩된 템플릿과 실제 데이터베이스 템플릿을 모두 고려
+  let displayTemplate = template;
+  
+  // 하드코딩된 템플릿 ID에 대한 처리
+  if (!displayTemplate && pin.templateId) {
+    displayTemplate = getHardcodedTemplate(pin.templateId);
   }
   const [isDragging, setIsDragging] = useState(false);
   const [currentPosition, setCurrentPosition] = useState({ x: pin.x, y: pin.y });
@@ -172,8 +178,8 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
       
       if (hasMoved) {
         const newPos = {
-          x: startPinX + deltaX / zoom,
-          y: startPinY + deltaY / zoom
+          x: startPinX + (deltaX * browserZoom) / zoom,
+          y: startPinY + (deltaY * browserZoom) / zoom
         };
         setCurrentPosition(newPos);
         finalPositionRef.current = newPos;
@@ -214,9 +220,11 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
           canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
         }`}
         style={{
-          left: currentPosition.x * zoom + panX - size / 2,
-          top: currentPosition.y * zoom + panY - size / 2,
+          left: (currentPosition.x * zoom + panX - size / 2) / browserZoom,
+          top: (currentPosition.y * zoom + panY - size / 2) / browserZoom,
           zIndex: isDragging ? 30 : 20,
+          transform: `scale(${browserZoom})`,
+          transformOrigin: 'center',
         }}
         onMouseDown={handleMouseDown}
         onClick={handleClick}
@@ -254,9 +262,11 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
         canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
       }`}
       style={{
-        left: currentPosition.x * zoom + panX - size / 2,
-        top: currentPosition.y * zoom + panY - size / 2,
+        left: (currentPosition.x * zoom + panX - size / 2) / browserZoom,
+        top: (currentPosition.y * zoom + panY - size / 2) / browserZoom,
         zIndex: isDragging ? 30 : 20,
+        transform: `scale(${browserZoom})`,
+        transformOrigin: 'center',
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}

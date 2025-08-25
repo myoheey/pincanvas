@@ -72,8 +72,10 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
     // Enable zoom and pan functionality
     canvas.allowTouchScrolling = true;
     
-    // Configure drawing brush
-    canvas.freeDrawingBrush = new PencilBrush(canvas);
+    // Configure drawing brush - Fabric.js v6 방식
+    if (!canvas.freeDrawingBrush) {
+      canvas.freeDrawingBrush = new PencilBrush(canvas);
+    }
     canvas.freeDrawingBrush.color = brushColor;
     canvas.freeDrawingBrush.width = brushSize;
 

@@ -16,6 +16,20 @@ interface MediaItem {
   name?: string;
 }
 
+interface PinTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  shape: 'circle' | 'square' | 'triangle' | 'star' | 'heart' | 'custom';
+  color: string;
+  size: 'small' | 'medium' | 'large';
+  icon?: string;
+  style?: any;
+  imageUrl?: string;
+  isDefault: boolean;
+  isPublic: boolean;
+}
+
 interface PinData {
   id: string;
   x: number;
@@ -24,6 +38,8 @@ interface PinData {
   description: string;
   layerId: string;
   canvasId: string;
+  templateId?: string;
+  template?: PinTemplate;
   mediaItems?: MediaItem[];
 }
 
@@ -101,7 +117,8 @@ export const PinInfoModal: React.FC<PinInfoModalProps> = ({
       title: editData.title,
       description: editData.description,
       mediaItems: editData.mediaItems,
-      template: editData.template
+      template: editData.template,
+      templateId: editData.template?.id,
     };
     
     onUpdate(updatedPin);

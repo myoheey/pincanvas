@@ -530,9 +530,9 @@ const CanvasView = () => {
     const rawX = e.clientX - rect.left;
     const rawY = e.clientY - rect.top;
     
-    // Apply inverse transform to get actual canvas coordinates
-    const x = (rawX - panX) / zoom;
-    const y = (rawY - panY) / zoom;
+    // Apply inverse transform to get actual canvas coordinates, considering browser zoom
+    const x = ((rawX * browserZoom) - panX) / zoom;
+    const y = ((rawY * browserZoom) - panY) / zoom;
     
     console.log('Click coordinates:', { rawX, rawY, x, y, zoom, panX, panY, browserZoom });
 
@@ -572,6 +572,10 @@ const CanvasView = () => {
         console.log('Creating new pin with data:', updatedPin);
         
         // 새 핀을 데이터베이스에 추가
+        // 하드코딩된 커스텀 템플릿 ID들은 null로 저장
+        const isHardcodedTemplate = updatedPin.templateId && 
+          (updatedPin.templateId.startsWith('custom-') || updatedPin.templateId.startsWith('default-'));
+        
         const insertData = {
           x: updatedPin.x,
           y: updatedPin.y,
@@ -579,7 +583,7 @@ const CanvasView = () => {
           description: updatedPin.description,
           layer_id: updatedPin.layerId,
           canvas_id: updatedPin.canvasId,
-          template_id: updatedPin.templateId
+          template_id: isHardcodedTemplate ? null : updatedPin.templateId
         };
         
         console.log('Insert data:', insertData);
