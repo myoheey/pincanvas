@@ -383,35 +383,47 @@ const CanvasView = () => {
 
         if (pinsError) throw pinsError;
 
-        const formattedPins: PinData[] = pinsData?.map(pin => ({
-          id: pin.id,
-          x: pin.x,
-          y: pin.y,
-          title: pin.title,
-          description: pin.description || '',
-          layerId: pin.layer_id,
-          canvasId: pin.canvas_id,
-          templateId: pin.template_id,
-          template: pin.pin_templates ? {
-            id: pin.pin_templates.id,
-            name: pin.pin_templates.name,
-            description: pin.pin_templates.description,
-            shape: pin.pin_templates.shape as PinTemplate['shape'],
-            color: pin.pin_templates.color,
-            size: pin.pin_templates.size as PinTemplate['size'],
-            icon: pin.pin_templates.icon,
-        style: pin.pin_templates.style,
-        imageUrl: pin.pin_templates.image_url,
-            isDefault: pin.pin_templates.is_default,
-            isPublic: pin.pin_templates.is_public,
-          } : undefined,
-          mediaItems: pin.media_items?.map((media: any) => ({
-            id: media.id,
-            type: media.type,
-            url: media.url,
-            name: media.name,
-          })) || [],
-        })) || [];
+        const formattedPins: PinData[] = pinsData?.map(pin => {
+          // 하드코딩된 템플릿 ID 복원
+          let templateId = pin.template_id;
+          let description = pin.description || '';
+          
+          if (!templateId && description.includes('||template:')) {
+            const parts = description.split('||template:');
+            description = parts[0];
+            templateId = parts[1];
+          }
+          
+          return {
+            id: pin.id,
+            x: pin.x,
+            y: pin.y,
+            title: pin.title,
+            description,
+            layerId: pin.layer_id,
+            canvasId: pin.canvas_id,
+            templateId,
+            template: pin.pin_templates ? {
+              id: pin.pin_templates.id,
+              name: pin.pin_templates.name,
+              description: pin.pin_templates.description,
+              shape: pin.pin_templates.shape as PinTemplate['shape'],
+              color: pin.pin_templates.color,
+              size: pin.pin_templates.size as PinTemplate['size'],
+              icon: pin.pin_templates.icon,
+              style: pin.pin_templates.style,
+              imageUrl: pin.pin_templates.image_url,
+              isDefault: pin.pin_templates.is_default,
+              isPublic: pin.pin_templates.is_public,
+            } : undefined,
+            mediaItems: pin.media_items?.map((media: any) => ({
+              id: media.id,
+              type: media.type,
+              url: media.url,
+              name: media.name,
+            })) || [],
+          };
+        }) || [];
 
         console.log('Formatted pins:', formattedPins.map(pin => ({
           id: pin.id,
@@ -530,15 +542,33 @@ const CanvasView = () => {
     const rawX = e.clientX - rect.left;
     const rawY = e.clientY - rect.top;
     
-    // Apply inverse transform to get actual canvas coordinates, considering browser zoom
-    const x = ((rawX * browserZoom) - panX) / zoom;
-    const y = ((rawY * browserZoom) - panY) / zoom;
+    // Apply inverse transform to get actual canvas coordinates
+    const x = (rawX - panX) / zoom;
+    const y = (rawY - panY) / zoom;
     
     console.log('Click coordinates:', { rawX, rawY, x, y, zoom, panX, panY, browserZoom });
 
-    // 핀 위치를 저장하고 템플릿 선택 모달 열기
-    setPendingPinPosition({ x, y });
-    setIsPinTemplateSelectorOpen(true);
+    // 기본 템플릿으로 바로 핀 생성 (템플릿 선택 모달 제거)
+    const defaultTemplate = pinTemplates.find(t => t.isDefault) || pinTemplates[0];
+    
+    if (defaultTemplate) {
+      const newPin: PinData = {
+        id: `temp-pin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        x,
+        y,
+        title: '새 핀',
+        description: '핀 설명을 입력하세요',
+        layerId: selectedLayerId,
+        canvasId: id || '1',
+        templateId: defaultTemplate.id,
+        template: defaultTemplate,
+        mediaItems: [],
+      };
+      
+      setSelectedPin(newPin);
+      setIsCreatingNewPin(true);
+      setIsPinModalOpen(true);
+    }
   };
 
   // Drawing canvas functions (these will be connected to the actual DrawingCanvas component)
@@ -572,7 +602,7 @@ const CanvasView = () => {
         console.log('Creating new pin with data:', updatedPin);
         
         // 새 핀을 데이터베이스에 추가
-        // 하드코딩된 커스텀 템플릿 ID들은 null로 저장
+        // 하드코딩된 커스텀 템플릿 ID들은 별도 필드에 저장
         const isHardcodedTemplate = updatedPin.templateId && 
           (updatedPin.templateId.startsWith('custom-') || updatedPin.templateId.startsWith('default-'));
         
@@ -583,7 +613,11 @@ const CanvasView = () => {
           description: updatedPin.description,
           layer_id: updatedPin.layerId,
           canvas_id: updatedPin.canvasId,
-          template_id: isHardcodedTemplate ? null : updatedPin.templateId
+          template_id: isHardcodedTemplate ? null : updatedPin.templateId,
+          // 하드코딩된 템플릿 ID를 별도 필드에 저장 (description에 추가)
+          ...(isHardcodedTemplate && { 
+            description: `${updatedPin.description}||template:${updatedPin.templateId}` 
+          })
         };
         
         console.log('Insert data:', insertData);
@@ -1391,41 +1425,6 @@ const CanvasView = () => {
         </div>
       </div>
 
-      {/* Pin Template Selector */}
-      {isPinTemplateSelectorOpen && (
-        <PinTemplateSelector
-          selectedTemplate={selectedPinTemplate}
-          onTemplateSelect={(template) => {
-            setSelectedPinTemplate(template);
-            setIsPinTemplateSelectorOpen(false);
-            
-            // 템플릿 선택 후 핀 생성
-            if (pendingPinPosition && selectedLayerId) {
-              const newPin: PinData = {
-                id: `temp-pin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                x: pendingPinPosition.x,
-                y: pendingPinPosition.y,
-                title: '새 핀',
-                description: '핀 설명을 입력하세요',
-                layerId: selectedLayerId,
-                canvasId: id || '1',
-                templateId: template?.id,
-                template: template,
-                mediaItems: [],
-              };
-              
-              setSelectedPin(newPin);
-              setIsCreatingNewPin(true);
-              setIsPinModalOpen(true);
-              setPendingPinPosition(null);
-            }
-          }}
-          onClose={() => {
-            setIsPinTemplateSelectorOpen(false);
-            setPendingPinPosition(null);
-          }}
-        />
-      )}
 
       {/* Pin Info Modal */}
       {canvas && (

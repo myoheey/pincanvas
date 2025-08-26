@@ -178,8 +178,8 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
       
       if (hasMoved) {
         const newPos = {
-          x: startPinX + (deltaX * browserZoom) / zoom,
-          y: startPinY + (deltaY * browserZoom) / zoom
+          x: startPinX + deltaX / (zoom * browserZoom),
+          y: startPinY + deltaY / (zoom * browserZoom)
         };
         setCurrentPosition(newPos);
         finalPositionRef.current = newPos;
@@ -220,11 +220,9 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
           canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
         }`}
         style={{
-          left: (currentPosition.x * zoom + panX - size / 2) / browserZoom,
-          top: (currentPosition.y * zoom + panY - size / 2) / browserZoom,
+          left: currentPosition.x * zoom + panX - size / 2,
+          top: currentPosition.y * zoom + panY - size / 2,
           zIndex: isDragging ? 30 : 20,
-          transform: `scale(${browserZoom})`,
-          transformOrigin: 'center',
         }}
         onMouseDown={handleMouseDown}
         onClick={handleClick}
@@ -262,11 +260,9 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
         canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
       }`}
       style={{
-        left: (currentPosition.x * zoom + panX - size / 2) / browserZoom,
-        top: (currentPosition.y * zoom + panY - size / 2) / browserZoom,
+        left: currentPosition.x * zoom + panX - size / 2,
+        top: currentPosition.y * zoom + panY - size / 2,
         zIndex: isDragging ? 30 : 20,
-        transform: `scale(${browserZoom})`,
-        transformOrigin: 'center',
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
