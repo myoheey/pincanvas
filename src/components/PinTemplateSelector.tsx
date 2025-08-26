@@ -60,24 +60,23 @@ const defaultTemplates = [
 ];
 
 const customTemplates = [
-  { id: 'custom-1', name: '산', shape: 'custom', imageUrl: '/images/Custom1.png', color: '#ff0000', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-2', name: '절', shape: 'custom', imageUrl: '/images/Custom2.png', color: '#00ff00', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-3', name: '학도명추모비', shape: 'custom', imageUrl: '/images/Custom3.png', color: '#0000ff', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-4', name: '언양성당', shape: 'custom', imageUrl: '/images/Custom4.png', color: '#ffff00', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-5', name: '암각화', shape: 'custom', imageUrl: '/images/Custom5.png', color: '#ff00ff', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-6', name: '읍성', shape: 'custom', imageUrl: '/images/Custom6.png', color: '#00ffff', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-7', name: '간절곶', shape: 'custom', imageUrl: '/images/Custom7.png', color: '#ff8800', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-8', name: '공장', shape: 'custom', imageUrl: '/images/Custom8.png', color: '#88ff00', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-9', name: '학교', shape: 'custom', imageUrl: '/images/Custom9.png', color: '#0088ff', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-10', name: '한글교실', shape: 'custom', imageUrl: '/images/Custom10.png', color: '#ff0088', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-11', name: '작천정', shape: 'custom', imageUrl: '/images/Custom11.png', color: '#88ff88', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-12', name: '강', shape: 'custom', imageUrl: '/images/Custom12.png', color: '#8888ff', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-13', name: '바다', shape: 'custom', imageUrl: '/images/Custom13.png', color: '#ff8888', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-14', name: '소호분교', shape: 'custom', imageUrl: '/images/Custom14.png', color: '#88ffff', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-15', name: '산촌유학', shape: 'custom', imageUrl: '/images/Custom15.png', color: '#ffff88', size: 'medium', isDefault: false, isPublic: true },
-  { id: 'custom-16', name: '땡땡마을', shape: 'custom', imageUrl: '/images/Custom16.png', color: '#ff88ff', size: 'medium', isDefault: false, isPublic: true },
+  { id: 'custom-1', name: '산', shape: 'custom', imageUrl: '/images/Custom1.png', color: '#ff0000', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-2', name: '절', shape: 'custom', imageUrl: '/images/Custom2.png', color: '#00ff00', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-3', name: '학도명추모비', shape: 'custom', imageUrl: '/images/Custom3.png', color: '#0000ff', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-4', name: '언양성당', shape: 'custom', imageUrl: '/images/Custom4.png', color: '#ffff00', size: 'largem', isDefault: false, isPublic: true },
+  { id: 'custom-5', name: '암각화', shape: 'custom', imageUrl: '/images/Custom5.png', color: '#ff00ff', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-6', name: '읍성', shape: 'custom', imageUrl: '/images/Custom6.png', color: '#00ffff', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-7', name: '간절곶', shape: 'custom', imageUrl: '/images/Custom7.png', color: '#ff8800', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-8', name: '공장', shape: 'custom', imageUrl: '/images/Custom8.png', color: '#88ff00', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-9', name: '학교', shape: 'custom', imageUrl: '/images/Custom9.png', color: '#0088ff', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-10', name: '한글교실', shape: 'custom', imageUrl: '/images/Custom10.png', color: '#ff0088', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-11', name: '작천정', shape: 'custom', imageUrl: '/images/Custom11.png', color: '#88ff88', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-12', name: '강', shape: 'custom', imageUrl: '/images/Custom12.png', color: '#8888ff', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-13', name: '바다', shape: 'custom', imageUrl: '/images/Custom13.png', color: '#ff8888', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-14', name: '소호분교', shape: 'custom', imageUrl: '/images/Custom14.png', color: '#88ffff', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-15', name: '산촌유학', shape: 'custom', imageUrl: '/images/Custom15.png', color: '#ffff88', size: 'large', isDefault: false, isPublic: true },
+  { id: 'custom-16', name: '땡땡마을', shape: 'custom', imageUrl: '/images/Custom16.png', color: '#ff88ff', size: 'large', isDefault: false, isPublic: true },
 ];
-
 
 export const PinTemplateSelector: React.FC<PinTemplateSelectorProps> = ({
   selectedTemplate,
