@@ -548,10 +548,10 @@ const CanvasView = () => {
     
     console.log('Click coordinates:', { rawX, rawY, x, y, zoom, panX, panY, browserZoom });
 
-    // 기본 템플릿으로 바로 핀 생성 (템플릿 선택 모달 제거)
-    const defaultTemplate = pinTemplates.find(t => t.isDefault) || pinTemplates[0];
+    // 선택된 템플릿이 있으면 사용, 없으면 기본 템플릿 사용
+    const templateToUse = selectedPinTemplate || pinTemplates.find(t => t.isDefault) || pinTemplates[0];
     
-    if (defaultTemplate) {
+    if (templateToUse) {
       const newPin: PinData = {
         id: `temp-pin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         x,
@@ -560,8 +560,8 @@ const CanvasView = () => {
         description: '핀 설명을 입력하세요',
         layerId: selectedLayerId,
         canvasId: id || '1',
-        templateId: defaultTemplate.id,
-        template: defaultTemplate,
+        templateId: templateToUse.id,
+        template: templateToUse,
         mediaItems: [],
       };
       
@@ -1493,6 +1493,18 @@ const CanvasView = () => {
         layerName={layers.find(l => l.id === duplicatingLayerId)?.name || ''}
         canvasId={id || ''}
       />
+
+      {/* Pin Template Selector Modal */}
+      {isPinTemplateSelectorOpen && (
+        <PinTemplateSelector
+          selectedTemplate={selectedPinTemplate}
+          onTemplateSelect={(template) => {
+            setSelectedPinTemplate(template);
+            setIsPinTemplateSelectorOpen(false);
+          }}
+          onClose={() => setIsPinTemplateSelectorOpen(false)}
+        />
+      )}
     </div>
   );
 };
