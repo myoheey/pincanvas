@@ -98,7 +98,7 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
       'custom-1': { id: 'custom-1', name: '산', shape: 'custom', imageUrl: '/images/Custom1.png', color: '#ff0000', size: 'medium', isDefault: false, isPublic: true },
       'custom-2': { id: 'custom-2', name: '절', shape: 'custom', imageUrl: '/images/Custom2.png', color: '#00ff00', size: 'medium', isDefault: false, isPublic: true },
       'custom-3': { id: 'custom-3', name: '학도병추모비', shape: 'custom', imageUrl: '/images/Custom3.png', color: '#0000ff', size: 'medium', isDefault: false, isPublic: true },
-      'custom-4': { id: 'custom-4', name: '성당', shape: 'custom', imageUrl: '/images/Custom4.png', color: '#ffff00', size: 'medium', isDefault: false, isPublic: true },
+      'custom-4': { id: 'custom-4', name: '언양성당', shape: 'custom', imageUrl: '/images/Custom4.png', color: '#ffff00', size: 'medium', isDefault: false, isPublic: true },
       'custom-5': { id: 'custom-5', name: '암각화', shape: 'custom', imageUrl: '/images/Custom5.png', color: '#ff00ff', size: 'medium', isDefault: false, isPublic: true },
       'custom-6': { id: 'custom-6', name: '읍성', shape: 'custom', imageUrl: '/images/Custom6.png', color: '#00ffff', size: 'medium', isDefault: false, isPublic: true },
       'custom-7': { id: 'custom-7', name: '간절곶', shape: 'custom', imageUrl: '/images/Custom7.png', color: '#ff8800', size: 'medium', isDefault: false, isPublic: true },
