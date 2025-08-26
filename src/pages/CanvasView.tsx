@@ -645,16 +645,25 @@ const CanvasView = () => {
         });
       } else {
         // 기존 핀을 데이터베이스에서 업데이트
+        // 하드코딩된 커스텀 템플릿 ID들은 별도 필드에 저장
+        const isHardcodedTemplate = updatedPin.templateId && 
+          (updatedPin.templateId.startsWith('custom-') || updatedPin.templateId.startsWith('default-'));
+        
+        const updateData = {
+          x: updatedPin.x,
+          y: updatedPin.y,
+          title: updatedPin.title,
+          layer_id: updatedPin.layerId,
+          template_id: isHardcodedTemplate ? null : updatedPin.templateId,
+          // 하드코딩된 템플릿 ID를 description에 인코딩
+          description: isHardcodedTemplate ? 
+            `${updatedPin.description.replace(/\|\|template:.*$/, '')}||template:${updatedPin.templateId}` : 
+            updatedPin.description
+        };
+
         const { error } = await supabase
           .from('pins')
-          .update({
-            x: updatedPin.x,
-            y: updatedPin.y,
-            title: updatedPin.title,
-            description: updatedPin.description,
-            layer_id: updatedPin.layerId,
-            template_id: updatedPin.templateId
-          })
+          .update(updateData)
           .eq('id', updatedPin.id);
 
         if (error) throw error;

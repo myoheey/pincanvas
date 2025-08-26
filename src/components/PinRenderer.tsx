@@ -119,8 +119,8 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
   // 템플릿 결정 로직 - 하드코딩된 템플릿과 실제 데이터베이스 템플릿을 모두 고려
   let displayTemplate = template;
   
-  // 하드코딩된 템플릿 ID에 대한 처리
-  if (!displayTemplate && pin.templateId) {
+  // 하드코딩된 템플릿 ID에 대한 처리 (template이 없거나 유효하지 않은 경우)
+  if ((!displayTemplate || !displayTemplate.id) && pin.templateId) {
     displayTemplate = getHardcodedTemplate(pin.templateId);
   }
   const [isDragging, setIsDragging] = useState(false);
@@ -220,8 +220,8 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
           canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
         }`}
         style={{
-          left: currentPosition.x * zoom + panX - size / 2,
-          top: currentPosition.y * zoom + panY - size / 2,
+          left: (currentPosition.x * zoom + panX) / browserZoom - size / 2,
+          top: (currentPosition.y * zoom + panY) / browserZoom - size / 2,
           zIndex: isDragging ? 30 : 20,
         }}
         onMouseDown={handleMouseDown}
@@ -260,8 +260,8 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
         canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
       }`}
       style={{
-        left: currentPosition.x * zoom + panX - size / 2,
-        top: currentPosition.y * zoom + panY - size / 2,
+        left: (currentPosition.x * zoom + panX) / browserZoom - size / 2,
+        top: (currentPosition.y * zoom + panY) / browserZoom - size / 2,
         zIndex: isDragging ? 30 : 20,
       }}
       onMouseDown={handleMouseDown}
