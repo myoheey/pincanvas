@@ -399,8 +399,26 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         canvas.renderAll();
       }
       
-      // Auto-save after a delay
-      setTimeout(() => saveDrawing(), 500);
+    // Auto-save after a delay  
+      setTimeout(() => {
+        saveDrawing();
+        // Also save state for undo/redo
+        if (!isLoadingFromJSON) {
+          const currentState = JSON.stringify(canvas.toJSON());
+          setUndoStack(prev => {
+            if (prev.length > 0 && prev[prev.length - 1] === currentState) {
+              return prev;
+            }
+            const newUndoStack = [...prev.slice(-9), currentState];
+            setTimeout(() => onUndoStackChange?.(newUndoStack), 0);
+            return newUndoStack;
+          });
+          setRedoStack(prev => {
+            setTimeout(() => onRedoStackChange?.([]), 0);
+            return [];
+          });
+        }
+      }, 1000);
     };
 
     canvas.on('path:created', handlePathCreated);

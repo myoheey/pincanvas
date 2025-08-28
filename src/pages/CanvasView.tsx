@@ -546,7 +546,19 @@ const CanvasView = () => {
     const x = (rawX - panX) / zoom;
     const y = (rawY - panY) / zoom;
     
-    console.log('Click coordinates:', { rawX, rawY, x, y, zoom, panX, panY, browserZoom });
+    console.log('Click coordinates:', { 
+      clientX: e.clientX, 
+      clientY: e.clientY, 
+      rectLeft: rect.left, 
+      rectTop: rect.top, 
+      rawX,
+      rawY,
+      panX, 
+      panY, 
+      zoom, 
+      finalX: x, 
+      finalY: y 
+    });
 
     // 선택된 템플릿이 있으면 사용, 없으면 기본 템플릿 사용
     const templateToUse = selectedPinTemplate || pinTemplates.find(t => t.isDefault) || pinTemplates[0];
