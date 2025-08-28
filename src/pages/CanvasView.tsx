@@ -543,6 +543,7 @@ const CanvasView = () => {
     const rawY = e.clientY - rect.top;
     
     // Apply inverse transform to get actual canvas coordinates
+    // Calculate position in canvas coordinates, not affected by zoom/pan
     const x = (rawX - panX) / zoom;
     const y = (rawY - panY) / zoom;
     
