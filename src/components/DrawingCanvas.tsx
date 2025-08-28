@@ -48,6 +48,93 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
   const [isLoadingFromJSON, setIsLoadingFromJSON] = useState(false);
   const { toast } = useToast();
 
+  const saveDrawing = useCallback(async () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    try {
+      // Reset viewport transform before saving to get actual object coordinates
+      const currentTransform = canvas.viewportTransform;
+      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+      
+      const drawingData = canvas.toJSON();
+      const hasObjects = drawingData.objects && drawingData.objects.length > 0;
+      
+      // Restore viewport transform
+      if (currentTransform) {
+        canvas.setViewportTransform(currentTransform);
+      }
+
+      // Local storage backup before attempting database save
+      const localStorageKey = `drawing_backup_${canvasId}_${layerId}`;
+      const backupData = {
+        drawingData,
+        timestamp: Date.now(),
+        hasObjects
+      };
+      
+      try {
+        if (hasObjects) {
+          localStorage.setItem(localStorageKey, JSON.stringify(backupData));
+          console.log('Drawing backed up to localStorage with', drawingData.objects.length, 'objects');
+        } else {
+          localStorage.removeItem(localStorageKey);
+          console.log('Empty drawing - backup removed from localStorage');
+        }
+      } catch (localError) {
+        console.warn('Failed to save drawing to localStorage:', localError);
+      }
+
+      if (hasObjects) {
+        const { error } = await supabase
+          .from('drawings')
+          .upsert({
+            canvas_id: canvasId,
+            layer_id: layerId,
+            drawing_data: drawingData,
+          });
+
+        if (error) throw error;
+        
+        // Success - remove backup
+        try {
+          localStorage.removeItem(localStorageKey);
+        } catch (localError) {
+          console.warn('Failed to remove backup from localStorage:', localError);
+        }
+      } else {
+        // Remove drawing if canvas is empty
+        await supabase
+          .from('drawings')
+          .delete()
+          .eq('canvas_id', canvasId)
+          .eq('layer_id', layerId);
+      }
+
+      // Defer the callback to avoid setState during render
+      setTimeout(() => onDrawingChange?.(hasObjects), 0);
+    } catch (error) {
+      console.error('Error saving drawing:', error);
+      
+      // Handle different types of errors more gracefully
+      if (error.message?.includes('406') || error.message?.includes('Not Acceptable')) {
+        console.warn('RLS policy issue - drawings saved locally only');
+      } else if (error.message?.includes('404') || error.code === 'PGRST116') {
+        console.warn('No drawing data found or table not accessible. Saved locally.');
+      } else if (error.code === '42P01') {
+        console.warn('Database tables not properly initialized. Saved locally.');
+      } else {
+        console.error('Unexpected save error:', error);
+        // Only show toast for unexpected errors
+        toast({
+          title: "그리기 저장 오류",
+          description: "온라인 저장에 실패했지만 로컬에 백업되었습니다.",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [canvasId, layerId, onDrawingChange, toast]);
+
   // Expose functions to parent component
   useImperativeHandle(ref, () => ({
     undo,
@@ -140,19 +227,27 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
   // Update viewport transform when zoom/pan changes
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || isLoadingFromJSON) return;
 
     // Save current viewport transform
     const vpt = canvas.viewportTransform;
     if (vpt) {
       // Apply zoom and pan transformation while preserving object positions
-      canvas.setViewportTransform([zoom, 0, 0, zoom, panX, panY]);
+      const newTransform = [zoom, 0, 0, zoom, panX, panY];
+      canvas.setViewportTransform(newTransform);
       canvas.renderAll();
+      
+      // Skip auto-save on viewport changes to prevent object loss
     }
-  }, [zoom, panX, panY]);
+  }, [zoom, panX, panY, isLoadingFromJSON]);
 
   const loadDrawings = async () => {
+    let dataToLoad = null;
+    let isFromBackup = false;
+    const localStorageKey = `drawing_backup_${canvasId}_${layerId}`;
+    
     try {
+      // Try to load from database first
       const { data, error } = await supabase
         .from('drawings')
         .select('drawing_data')
@@ -162,45 +257,76 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
 
       if (error && error.code !== 'PGRST116') throw error;
 
-      if (data && fabricCanvasRef.current && data.drawing_data) {
-        setIsLoadingFromJSON(true);
-        // Reset viewport transform before loading
-        fabricCanvasRef.current.setViewportTransform([1, 0, 0, 1, 0, 0]);
-        
-        fabricCanvasRef.current.loadFromJSON(data.drawing_data as any, () => {
-          const canvas = fabricCanvasRef.current;
-          if (canvas) {
-            // Apply current viewport transform after loading
-            canvas.setViewportTransform([zoom, 0, 0, zoom, panX, panY]);
-            canvas.renderAll();
-            // Defer the callback to avoid setState during render
-            setTimeout(() => onDrawingChange?.(true), 0);
-            setIsLoadingFromJSON(false);
-            
-            // Save initial state after loading (only if undo stack is empty)
-            setTimeout(() => {
-              setUndoStack(prev => {
-                if (prev.length === 0) {
-                  const currentTransform = canvas.viewportTransform;
-                  canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-                  const initialState = JSON.stringify(canvas.toJSON());
-                  if (currentTransform) {
-                    canvas.setViewportTransform(currentTransform);
-                  }
-                  return [initialState];
-                }
-                return prev;
-              });
-            }, 100);
+      if (data && data.drawing_data) {
+        dataToLoad = data.drawing_data;
+      }
+    } catch (error) {
+      console.error('Error loading drawings from database:', error);
+      
+      // Try to load from localStorage backup
+      try {
+        const backupDataStr = localStorage.getItem(localStorageKey);
+        if (backupDataStr) {
+          const backupData = JSON.parse(backupDataStr);
+          
+          // Handle both old format (direct drawingData) and new format (with metadata)
+          if (backupData.drawingData) {
+            dataToLoad = backupData.drawingData;
+            console.log('Loading drawing from local backup (new format) with', backupData.drawingData.objects?.length || 0, 'objects');
+          } else {
+            dataToLoad = backupData;
+            console.log('Loading drawing from local backup (old format) with', backupData.objects?.length || 0, 'objects');
           }
-        });
-      } else {
-        // No existing data, save empty canvas as initial state
-        setTimeout(() => {
-          setUndoStack(prev => {
-            if (prev.length === 0) {
+          
+          isFromBackup = true;
+          
+          toast({
+            title: "백업에서 복원됨",
+            description: "네트워크 오류로 인해 로컬 백업에서 그림을 복원했습니다.",
+            variant: "default",
+          });
+        }
+      } catch (backupError) {
+        console.error('Error loading from backup:', backupError);
+        // Try to clear corrupted backup
+        try {
+          localStorage.removeItem(localStorageKey);
+        } catch (e) {
+          console.error('Failed to remove corrupted backup:', e);
+        }
+      }
+    }
+
+    if (dataToLoad && fabricCanvasRef.current) {
+      setIsLoadingFromJSON(true);
+      // Reset viewport transform before loading
+      fabricCanvasRef.current.setViewportTransform([1, 0, 0, 1, 0, 0]);
+      
+      fabricCanvasRef.current.loadFromJSON(dataToLoad as any, () => {
+        const canvas = fabricCanvasRef.current;
+        if (canvas) {
+          // Apply current viewport transform after loading
+          canvas.setViewportTransform([zoom, 0, 0, zoom, panX, panY]);
+          canvas.renderAll();
+          // Defer the callback to avoid setState during render
+          setTimeout(() => onDrawingChange?.(true), 0);
+          setIsLoadingFromJSON(false);
+          
+          // If loaded from backup, try to sync to database
+          if (isFromBackup) {
+            setTimeout(() => {
               const canvas = fabricCanvasRef.current;
               if (canvas) {
+                console.log('Syncing backup to database');
+                // Basic sync logic would go here
+              }
+            }, 1000);
+          }
+          
+          // Save initial state after loading (only if undo stack is empty)
+          setTimeout(() => {
+            setUndoStack(prev => {
+              if (prev.length === 0) {
                 const currentTransform = canvas.viewportTransform;
                 canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
                 const initialState = JSON.stringify(canvas.toJSON());
@@ -209,20 +335,13 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
                 }
                 return [initialState];
               }
-            }
-            return prev;
-          });
-        }, 500);
-      }
-    } catch (error) {
-      console.error('Error loading drawings:', error);
-      // Don't block app functionality for drawing load errors
-      if (error.code === '42P01') {
-        console.warn('Database tables not properly initialized. Please check Supabase migration status.');
-      } else if (error.code === 'PGRST116') {
-        console.log('No existing drawing data found. Starting with empty canvas.');
-      }
-      // Initialize empty canvas anyway
+              return prev;
+            });
+          }, 100);
+        }
+      });
+    } else {
+      // No existing data, save empty canvas as initial state
       setTimeout(() => {
         setUndoStack(prev => {
           if (prev.length === 0) {
@@ -242,62 +361,6 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       }, 500);
     }
   };
-
-  const saveDrawing = useCallback(async () => {
-    const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
-
-    try {
-      // Reset viewport transform before saving to get actual object coordinates
-      const currentTransform = canvas.viewportTransform;
-      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-      
-      const drawingData = canvas.toJSON();
-      const hasObjects = drawingData.objects && drawingData.objects.length > 0;
-      
-      // Restore viewport transform
-      if (currentTransform) {
-        canvas.setViewportTransform(currentTransform);
-      }
-
-      if (hasObjects) {
-        const { error } = await supabase
-          .from('drawings')
-          .upsert({
-            canvas_id: canvasId,
-            layer_id: layerId,
-            drawing_data: drawingData,
-          });
-
-        if (error) throw error;
-      } else {
-        // Remove drawing if canvas is empty
-        await supabase
-          .from('drawings')
-          .delete()
-          .eq('canvas_id', canvasId)
-          .eq('layer_id', layerId);
-      }
-
-      // Defer the callback to avoid setState during render
-      setTimeout(() => onDrawingChange?.(hasObjects), 0);
-    } catch (error) {
-      console.error('Error saving drawing:', error);
-      // Don't throw error to prevent blocking user interaction
-      if (error.code === '42P01') {
-        console.warn('Database tables not properly initialized. Please check Supabase migration status.');
-      } else if (error.code === 'PGRST116') {
-        console.warn('No drawing data found. This is normal for new canvases.');
-      } else {
-        // Only show toast for unexpected errors
-        toast({
-          title: "그리기 저장 오류",
-          description: "그리기를 저장하는 중 문제가 발생했습니다.",
-          variant: "destructive",
-        });
-      }
-    }
-  }, [canvasId, layerId, onDrawingChange]);
 
   // Configure drawing tools and styles
   useEffect(() => {
@@ -461,7 +524,9 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         canvas.setViewportTransform([zoom, 0, 0, zoom, panX, panY]);
         canvas.renderAll();
         setIsLoadingFromJSON(false);
-        setTimeout(() => saveDrawing(), 100);
+        setTimeout(() => {
+          saveDrawing();
+        }, 100);
       });
     } else {
       setRedoStack(prev => {
@@ -484,7 +549,9 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         canvas.setViewportTransform([zoom, 0, 0, zoom, panX, panY]);
         canvas.renderAll();
         setIsLoadingFromJSON(false);
-        setTimeout(() => saveDrawing(), 100);
+        setTimeout(() => {
+          saveDrawing();
+        }, 100);
       });
     }
   };

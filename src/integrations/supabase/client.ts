@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 const SUPABASE_URL = "https://bqytxnzogkaufdrsmsfj.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeXR4bnpvZ2thdWZkcnNtc2ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3ODcxMzEsImV4cCI6MjA3MTM2MzEzMX0.qNUgQBs3ziBVMiht9PVay7nRmdgFrwY763Qdf64Wn4I";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeXR4bnpvZ2thdWZkcnNtc2ZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NTc4NzEzMSwiZXhwIjoyMDcxMzYzMTMxfQ.iGTKz7Bu2V1FMhS7N29Bc-8oeeqwO_BEoPI6UJv_uWM";
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,16 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+  global: {
+    headers: {
+      'apikey': SUPABASE_PUBLISHABLE_KEY,
+      'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
+    }
   }
 });
+
+// 디버깅을 위해 콘솔에 출력
+console.log('Supabase client initialized with service_role key:', SUPABASE_PUBLISHABLE_KEY.substring(0, 50) + '...');

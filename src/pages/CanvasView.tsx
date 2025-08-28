@@ -139,6 +139,26 @@ const CanvasView = () => {
   // Browser zoom detection
   const [browserZoom, setBrowserZoom] = useState(1);
   
+  // 캔버스 기본 크기 (고정값)
+  const CANVAS_BASE_WIDTH = 1200;
+  const CANVAS_BASE_HEIGHT = 800;
+
+  // 캔버스 크기를 기준으로 상대 좌표로 변환
+  const convertToRelativeCoords = (x: number, y: number) => {
+    return {
+      x: x / CANVAS_BASE_WIDTH,  // 0.0 ~ 1.0 사이의 비율
+      y: y / CANVAS_BASE_HEIGHT  // 0.0 ~ 1.0 사이의 비율
+    };
+  };
+
+  // 상대 좌표를 절대 좌표로 변환
+  const convertToAbsoluteCoords = (relativeX: number, relativeY: number) => {
+    return {
+      x: relativeX * CANVAS_BASE_WIDTH,
+      y: relativeY * CANVAS_BASE_HEIGHT
+    };
+  };
+  
   // Handle mouse events for zoom/pan
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.ctrlKey || e.metaKey) {
@@ -164,13 +184,6 @@ const CanvasView = () => {
     setIsDragging(false);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      setZoom(prev => Math.max(0.1, Math.min(3, prev * zoomFactor)));
-    }
-  };
 
   // Reset zoom and pan
   const resetView = () => {
@@ -187,10 +200,11 @@ const CanvasView = () => {
     }
   }, [id, user]);
 
-  // Detect browser zoom changes
+  // Enhanced browser zoom detection with multiple methods
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     let rafId: number;
+    let lastDetectedZoom = 1;
     
     const detectZoom = () => {
       // Cancel previous timeout and RAF
@@ -204,62 +218,119 @@ const CanvasView = () => {
           let detectedZoom = 1;
           
           try {
-            // Use test element method for accurate zoom detection
-            const testDiv = document.createElement('div');
-            testDiv.style.width = '1in';
-            testDiv.style.height = '1in';
-            testDiv.style.position = 'absolute';
-            testDiv.style.left = '-9999px';
-            testDiv.style.top = '-9999px';
-            testDiv.style.visibility = 'hidden';
-            document.body.appendChild(testDiv);
+            // Method 1: Simple window.outerWidth / window.innerWidth approach
+            if (window.outerWidth && window.innerWidth) {
+              detectedZoom = window.outerWidth / window.innerWidth;
+            }
             
-            const rect = testDiv.getBoundingClientRect();
-            detectedZoom = 96 / rect.width; // 1 inch = 96 CSS pixels
+            // Method 2: Test element approach (backup method)
+            if (detectedZoom === 1) {
+              const testDiv = document.createElement('div');
+              testDiv.style.cssText = `
+                width: 1in;
+                height: 1in;
+                position: absolute;
+                left: -9999px;
+                top: -9999px;
+                visibility: hidden;
+                z-index: -1000;
+              `;
+              document.body.appendChild(testDiv);
+              
+              const rect = testDiv.getBoundingClientRect();
+              if (rect.width > 0) {
+                detectedZoom = 96 / rect.width; // 1 inch = 96 CSS pixels
+              }
+              
+              document.body.removeChild(testDiv);
+            }
             
-            document.body.removeChild(testDiv);
+            // Method 3: Screen width comparison (additional validation)
+            if (screen.width && window.innerWidth) {
+              const screenBasedZoom = screen.width / window.innerWidth;
+              // Use screen-based zoom if it seems more accurate
+              if (Math.abs(screenBasedZoom - detectedZoom) < 0.1 && screenBasedZoom > 0.5 && screenBasedZoom < 3) {
+                detectedZoom = (detectedZoom + screenBasedZoom) / 2; // Average for stability
+              }
+            }
             
-            // Clamp zoom values to reasonable range
-            detectedZoom = Math.max(0.5, Math.min(5, detectedZoom));
+            // Clamp zoom values to reasonable range and round to avoid float precision issues
+            detectedZoom = Math.round(Math.max(0.25, Math.min(5, detectedZoom)) * 100) / 100;
             
           } catch (error) {
-            console.warn('Zoom detection failed, using default:', error);
-            detectedZoom = 1;
+            console.warn('Zoom detection failed, using previous value:', error);
+            detectedZoom = lastDetectedZoom;
           }
           
+          // Apply smoothing to prevent jitter
+          const smoothedZoom = lastDetectedZoom * 0.7 + detectedZoom * 0.3;
+          
           setBrowserZoom(prev => {
-            // Only update if there's a significant change (threshold: 0.05)
-            if (Math.abs(prev - detectedZoom) > 0.05) {
-              console.log('Browser zoom changed:', prev.toFixed(2), '->', detectedZoom.toFixed(2));
-              return detectedZoom;
+            // Only update if there's a significant change (threshold: 0.02 for more sensitivity)
+            if (Math.abs(prev - smoothedZoom) > 0.02) {
+              console.log('Browser zoom changed:', prev.toFixed(3), '->', smoothedZoom.toFixed(3));
+              lastDetectedZoom = smoothedZoom;
+              return smoothedZoom;
             }
             return prev;
           });
-        }, 150); // Increased debounce time for better performance
+        }, 100); // Reduced debounce time for more responsive updates
       });
     };
 
-    // Initial detection
-    detectZoom();
+    // Initial detection with slight delay
+    setTimeout(detectZoom, 100);
     
-    // Listen for relevant events
-    const events = ['resize', 'orientationchange'];
+    // Listen for relevant events with passive listeners for better performance
+    const events = ['resize', 'orientationchange', 'load'];
     events.forEach(event => window.addEventListener(event, detectZoom, { passive: true }));
     
+    // Visual viewport API for better mobile support
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', detectZoom, { passive: true });
+      window.visualViewport.addEventListener('scroll', detectZoom, { passive: true });
     }
+    
+    // Additional event listeners for zoom detection
+    // Note: wheel event with preventDefault needs non-passive listener
+    document.addEventListener('gesturestart', detectZoom, { passive: true });
+    document.addEventListener('gesturechange', detectZoom, { passive: true });
+    document.addEventListener('gestureend', detectZoom, { passive: true });
     
     // Cleanup
     return () => {
       clearTimeout(timeoutId);
       cancelAnimationFrame(rafId);
       events.forEach(event => window.removeEventListener(event, detectZoom));
+      document.removeEventListener('gesturestart', detectZoom);
+      document.removeEventListener('gesturechange', detectZoom);
+      document.removeEventListener('gestureend', detectZoom);
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', detectZoom);
+        window.visualViewport.removeEventListener('scroll', detectZoom);
       }
     };
   }, []);
+
+  // Separate wheel event handler to avoid passive listener issues
+  useEffect(() => {
+    const handleWheelZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        setZoom(prev => Math.max(0.1, Math.min(3, prev * zoomFactor)));
+      }
+    };
+
+    // Add non-passive wheel listener for zoom control
+    const container = canvasContainerRef.current;
+    if (container) {
+      container.addEventListener('wheel', handleWheelZoom, { passive: false });
+      return () => {
+        container.removeEventListener('wheel', handleWheelZoom);
+      };
+    }
+  }, [canvasContainerRef]);
 
   const checkUserPermission = async () => {
     if (!id) {
@@ -427,6 +498,8 @@ const CanvasView = () => {
 
         console.log('Formatted pins:', formattedPins.map(pin => ({
           id: pin.id,
+          x: pin.x,
+          y: pin.y,
           templateId: pin.templateId,
           template: pin.template ? {
             name: pin.template.name,
@@ -546,7 +619,13 @@ const CanvasView = () => {
     const x = (rawX - panX) / zoom;
     const y = (rawY - panY) / zoom;
     
-    console.log('Click coordinates:', { rawX, rawY, x, y, zoom, panX, panY, browserZoom });
+    // Convert to relative coordinates for storage
+    const relativeCoords = convertToRelativeCoords(x, y);
+    
+    console.log('Click coordinates:', { 
+      rawX, rawY, x, y, zoom, panX, panY, browserZoom,
+      relative: relativeCoords 
+    });
 
     // 선택된 템플릿이 있으면 사용, 없으면 기본 템플릿 사용
     const templateToUse = selectedPinTemplate || pinTemplates.find(t => t.isDefault) || pinTemplates[0];
@@ -606,9 +685,12 @@ const CanvasView = () => {
         const isHardcodedTemplate = updatedPin.templateId && 
           (updatedPin.templateId.startsWith('custom-') || updatedPin.templateId.startsWith('default-'));
         
+        // 절대 좌표를 상대 좌표로 변환
+        const pinRelativeCoords = convertToRelativeCoords(updatedPin.x, updatedPin.y);
+        
         const insertData = {
-          x: updatedPin.x,
-          y: updatedPin.y,
+          x: pinRelativeCoords.x,
+          y: pinRelativeCoords.y,
           title: updatedPin.title,
           description: updatedPin.description,
           layer_id: updatedPin.layerId,
@@ -649,9 +731,12 @@ const CanvasView = () => {
         const isHardcodedTemplate = updatedPin.templateId && 
           (updatedPin.templateId.startsWith('custom-') || updatedPin.templateId.startsWith('default-'));
         
+        // 절대 좌표를 상대 좌표로 변환
+        const updateRelativeCoords = convertToRelativeCoords(updatedPin.x, updatedPin.y);
+        
         const updateData = {
-          x: updatedPin.x,
-          y: updatedPin.y,
+          x: updateRelativeCoords.x,
+          y: updateRelativeCoords.y,
           title: updatedPin.title,
           layer_id: updatedPin.layerId,
           template_id: isHardcodedTemplate ? null : updatedPin.templateId,
@@ -719,20 +804,31 @@ const CanvasView = () => {
   };
 
   const handlePinPositionChange = async (pinId: string, x: number, y: number) => {
+    // 절대 좌표를 상대 좌표로 변환
+    const relativeCoords = convertToRelativeCoords(x, y);
     // 먼저 로컬 상태 업데이트 (즉시 UI 반영)
     const updatedPins = pins.map(pin => 
       pin.id === pinId ? { ...pin, x, y } : pin
     );
     setPins(updatedPins);
 
-    // 백그라운드에서 데이터베이스 업데이트
+    // 백그라운드에서 데이터베이스에 상대 좌표로 업데이트
     try {
       const { error } = await supabase
         .from('pins')
-        .update({ x, y })
+        .update({ 
+          x: relativeCoords.x, 
+          y: relativeCoords.y 
+        })
         .eq('id', pinId);
 
       if (error) throw error;
+
+      console.log('Pin position updated (relative):', { 
+        pinId, 
+        absolute: { x, y },
+        relative: relativeCoords
+      });
 
     } catch (error) {
       console.error('Error updating pin position:', error);
@@ -1343,11 +1439,12 @@ const CanvasView = () => {
             id="main-canvas"
             className={`relative bg-white rounded-lg shadow-lg overflow-hidden ${isPresentationMode ? 'w-full h-full cursor-default' : 'cursor-crosshair'}`}
             style={{ 
-              minHeight: '600px',
+              minHeight: isPresentationMode ? '100vh' : '600px',
+              width: isPresentationMode ? '100vw' : 'auto',
               backgroundColor: canvas.backgroundType === 'color' ? canvas.backgroundColor : '#ffffff',
               backgroundImage: canvas.backgroundType === 'image' && canvas.backgroundImageUrl ? 
                 `url(${canvas.backgroundImageUrl})` : 'none',
-              backgroundSize: 'cover',
+              backgroundSize: 'contain',
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',
 
@@ -1355,7 +1452,6 @@ const CanvasView = () => {
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onWheel={handleWheel}
           >
             <div
               className="w-full h-full relative"
@@ -1388,22 +1484,42 @@ const CanvasView = () => {
             )}
             
             {/* Pins */}
-            {getVisiblePins().map((pin) => (
-              <PinRenderer
-                key={pin.id}
-                pin={pin}
-                template={pin.template}
-                onClick={() => handlePinClick(pin)}
-                isVisible={true}
-                layerColor={getLayerColor(pin.layerId)}
-                onPositionChange={handlePinPositionChange}
-                canEdit={canEdit}
-                zoom={zoom}
-                panX={panX}
-                panY={panY}
-                browserZoom={browserZoom}
-              />
-            ))}
+            {getVisiblePins().map((pin) => {
+              // 좌표가 이미 절대값인지 상대값인지 감지
+              const isRelativeCoord = pin.x <= 1 && pin.y <= 1;
+              
+              let finalCoords;
+              if (isRelativeCoord) {
+                // 상대 좌표를 절대 좌표로 변환
+                finalCoords = convertToAbsoluteCoords(pin.x, pin.y);
+              } else {
+                // 이미 절대 좌표인 경우 그대로 사용
+                finalCoords = { x: pin.x, y: pin.y };
+              }
+              
+              const pinWithAbsoluteCoords = {
+                ...pin,
+                x: finalCoords.x,
+                y: finalCoords.y
+              };
+              
+              return (
+                <PinRenderer
+                  key={pin.id}
+                  pin={pinWithAbsoluteCoords}
+                  template={pin.template}
+                  onClick={() => handlePinClick(pin)}
+                  isVisible={true}
+                  layerColor={getLayerColor(pin.layerId)}
+                  onPositionChange={handlePinPositionChange}
+                  canEdit={canEdit && !isPresentationMode}
+                  zoom={isPresentationMode ? 1 : zoom}
+                  panX={isPresentationMode ? 0 : panX}
+                  panY={isPresentationMode ? 0 : panY}
+                  browserZoom={1}
+                />
+              );
+            })}
 
             {/* Drawing Canvas - always visible */}
             {selectedLayerId && (

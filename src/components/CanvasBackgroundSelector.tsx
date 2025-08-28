@@ -52,6 +52,55 @@ const CanvasBackgroundSelector = ({
     }
   };
 
+  const processAndResizeImage = (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // 최적 크기 설정 (1920x1080 기준으로 비율 유지하며 축소)
+        const maxWidth = 1920;
+        const maxHeight = 1080;
+        let { width, height } = img;
+        
+        // 비율을 유지하며 크기 조정
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width *= ratio;
+          height *= ratio;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // 고품질로 이미지 그리기
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const resizedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+              });
+              resolve(resizedFile);
+            } else {
+              reject(new Error('이미지 처리에 실패했습니다.'));
+            }
+          }, 'image/jpeg', 0.9);
+        } else {
+          reject(new Error('Canvas context를 생성할 수 없습니다.'));
+        }
+      };
+      
+      img.onerror = () => reject(new Error('이미지 로드에 실패했습니다.'));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -61,21 +110,25 @@ const CanvasBackgroundSelector = ({
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      toast.error('파일 크기는 10MB 이하여야 합니다.');
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit (원본 파일 기준)
+      toast.error('파일 크기는 50MB 이하여야 합니다.');
       return;
     }
 
     setIsUploading(true);
     
     try {
-      const fileExt = file.name.split('.').pop();
+      // 이미지 크기 조정 처리
+      toast.success('이미지 최적화 중...');
+      const processedFile = await processAndResizeImage(file);
+      
+      const fileExt = 'jpg'; // 항상 JPG로 변환
       const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `${canvasId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('canvas-backgrounds')
-        .upload(filePath, file);
+        .upload(filePath, processedFile);
 
       if (uploadError) throw uploadError;
 
@@ -85,7 +138,7 @@ const CanvasBackgroundSelector = ({
 
       onBackgroundUpdate('image', undefined, data.publicUrl);
       setIsOpen(false);
-      toast.success('배경 이미지가 업로드되었습니다.');
+      toast.success('배경 이미지가 최적화되어 업로드되었습니다.');
     } catch (error) {
       console.error('File upload error:', error);
       toast.error('이미지 업로드에 실패했습니다.');
