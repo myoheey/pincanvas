@@ -616,6 +616,7 @@ const CanvasView = () => {
     const rawY = e.clientY - rect.top;
     
     // Apply inverse transform to get actual canvas coordinates
+    // Calculate position in canvas coordinates, not affected by zoom/pan
     const x = (rawX - panX) / zoom;
     const y = (rawY - panY) / zoom;
     
@@ -624,7 +625,7 @@ const CanvasView = () => {
     
     console.log('Click coordinates:', { 
       rawX, rawY, x, y, zoom, panX, panY, browserZoom,
-      relative: relativeCoords 
+      relative: relativeCoords
     });
 
     // 선택된 템플릿이 있으면 사용, 없으면 기본 템플릿 사용
