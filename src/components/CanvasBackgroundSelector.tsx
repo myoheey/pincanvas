@@ -56,7 +56,7 @@ const CanvasBackgroundSelector = ({
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      const img = new Image();
+      const img = new window.Image();
       
       img.onload = () => {
         // 최적 크기 설정 (1920x1080 기준으로 비율 유지하며 축소)

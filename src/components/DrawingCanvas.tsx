@@ -299,7 +299,7 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
     const vpt = canvas.viewportTransform;
     if (vpt) {
       // Apply zoom and pan transformation while preserving object positions
-      const newTransform = [zoom, 0, 0, zoom, panX, panY];
+      const newTransform: [number, number, number, number, number, number] = [zoom, 0, 0, zoom, panX, panY];
       canvas.setViewportTransform(newTransform);
       canvas.renderAll();
       
@@ -361,7 +361,6 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         console.warn('LoadDrawings: Error reading from localStorage:', localError);
       }
     }
-
 
     if (!dataToLoad) {
       console.log('LoadDrawings: No drawing data found in database or localStorage');
