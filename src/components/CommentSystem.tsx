@@ -97,7 +97,7 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
     if (!allowComments) return;
     
     const { data, error } = await supabase
-      .from('secure_comments')
+      .from('comments')
       .select('*')
       .eq('pin_id', pinId)
       .order('created_at', { ascending: true });
