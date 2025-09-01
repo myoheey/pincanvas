@@ -37,6 +37,8 @@ interface Canvas {
   backgroundType: 'color' | 'image';
   backgroundColor: string;
   backgroundImageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 interface Layer {
@@ -135,28 +137,66 @@ const CanvasView = () => {
   // Canvas container reference
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const drawingCanvasRef = useRef<any>(null);
+  const canvasImageRef = useRef<HTMLImageElement | null>(null);
   
   // Browser zoom detection
   const [browserZoom, setBrowserZoom] = useState(1);
   
-  // 캔버스 기본 크기 (고정값)
-  const CANVAS_BASE_WIDTH = 1200;
-  const CANVAS_BASE_HEIGHT = 800;
-
-  // 캔버스 크기를 기준으로 상대 좌표로 변환
-  const convertToRelativeCoords = (x: number, y: number) => {
-    return {
-      x: x / CANVAS_BASE_WIDTH,  // 0.0 ~ 1.0 사이의 비율
-      y: y / CANVAS_BASE_HEIGHT  // 0.0 ~ 1.0 사이의 비율
-    };
+  // 🔧 DYNAMIC CANVAS APPROACH: 이미지 비율 기반 동적 캔버스 크기
+  const REFERENCE_WIDTH = 1200; // 고정 가로 크기
+  
+  // 캔버스 크기 계산 (이미지 비율 기반)
+  const calculateCanvasDimensions = () => {
+    if (canvas?.imageUrl && canvas.imageUrl !== '/placeholder.svg' && canvas.imageWidth && canvas.imageHeight) {
+      // 이미지가 있는 경우: 이미지 비율 기반으로 계산
+      const aspectRatio = canvas.imageHeight / canvas.imageWidth;
+      const canvasHeight = Math.round(REFERENCE_WIDTH * aspectRatio);
+      return { width: REFERENCE_WIDTH, height: canvasHeight };
+    } else {
+      // 기본 캔버스 크기 (16:10 비율)
+      return { width: REFERENCE_WIDTH, height: 750 };
+    }
+  };
+  
+  const canvasDimensions = calculateCanvasDimensions();
+  
+  // 이미지 로드 시 실제 크기 감지
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.target as HTMLImageElement;
+    const naturalWidth = img.naturalWidth;
+    const naturalHeight = img.naturalHeight;
+    
+    console.log('🖼️ Image loaded:', { naturalWidth, naturalHeight });
+    
+    // 캔버스 상태에 이미지 크기 저장
+    if (canvas && (!canvas.imageWidth || !canvas.imageHeight)) {
+      setCanvas(prev => prev ? {
+        ...prev,
+        imageWidth: naturalWidth,
+        imageHeight: naturalHeight
+      } : null);
+      
+      // 데이터베이스에도 업데이트 (선택적)
+      // updateCanvasImageDimensions(naturalWidth, naturalHeight);
+    }
+  };
+  
+  // 클릭 좌표를 상대 좌표로 변환 (저장용)
+  const convertToRelativeCoords = (pixelX: number, pixelY: number, containerWidth: number, containerHeight: number) => {
+    const relativeX = Math.max(0, Math.min(1, pixelX / containerWidth));
+    const relativeY = Math.max(0, Math.min(1, pixelY / containerHeight));
+    
+    console.log('🎯 Pixel→Relative conversion:', `(${pixelX.toFixed(2)}, ${pixelY.toFixed(2)}) → (${relativeX.toFixed(4)}, ${relativeY.toFixed(4)}) [container: ${containerWidth}×${containerHeight}]`);
+    
+    return { x: relativeX, y: relativeY };
   };
 
-  // 상대 좌표를 절대 좌표로 변환
-  const convertToAbsoluteCoords = (relativeX: number, relativeY: number) => {
-    return {
-      x: relativeX * CANVAS_BASE_WIDTH,
-      y: relativeY * CANVAS_BASE_HEIGHT
-    };
+  // 상대 좌표를 현재 캔버스 크기 기준 픽셀 좌표로 변환 (표시용)
+  const convertToAbsoluteCoords = (relativeX: number, relativeY: number, containerWidth: number, containerHeight: number) => {
+    const absoluteX = relativeX * containerWidth;
+    const absoluteY = relativeY * containerHeight;
+    
+    return { x: absoluteX, y: absoluteY };
   };
   
   // Handle mouse events for zoom/pan
@@ -218,68 +258,91 @@ const CanvasView = () => {
           let detectedZoom = 1;
           
           try {
-            // Method 1: Simple window.outerWidth / window.innerWidth approach
-            if (window.outerWidth && window.innerWidth) {
-              detectedZoom = window.outerWidth / window.innerWidth;
+            // Method 1: Use media queries - most reliable approach
+            detectedZoom = window.devicePixelRatio / (window.devicePixelRatio || 1);
+            
+            // Method 2: Compare actual vs expected element size
+            const testElement = document.createElement('div');
+            testElement.style.cssText = `
+              position: absolute !important;
+              left: -9999px !important;
+              top: -9999px !important;
+              width: 1in !important;
+              height: 1in !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              border: 0 !important;
+              visibility: hidden !important;
+              pointer-events: none !important;
+            `;
+            
+            document.body.appendChild(testElement);
+            const computedRect = testElement.getBoundingClientRect();
+            document.body.removeChild(testElement);
+            
+            if (computedRect.width > 0) {
+              // 1 inch should be 96 CSS pixels at 100% zoom
+              detectedZoom = 96 / computedRect.width;
+              console.log('🔍 Test element detection:', {
+                expectedWidth: 96,
+                actualWidth: computedRect.width.toFixed(2),
+                calculatedZoom: detectedZoom.toFixed(3)
+              });
             }
             
-            // Method 2: Test element approach (backup method)
-            if (detectedZoom === 1) {
-              const testDiv = document.createElement('div');
-              testDiv.style.cssText = `
-                width: 1in;
-                height: 1in;
-                position: absolute;
-                left: -9999px;
-                top: -9999px;
-                visibility: hidden;
-                z-index: -1000;
-              `;
-              document.body.appendChild(testDiv);
-              
-              const rect = testDiv.getBoundingClientRect();
-              if (rect.width > 0) {
-                detectedZoom = 96 / rect.width; // 1 inch = 96 CSS pixels
+            // Method 3: Screen-based calculation as fallback
+            if (detectedZoom === 1 && screen.width && window.innerWidth) {
+              const screenRatio = screen.width / window.innerWidth;
+              if (screenRatio > 0.1 && screenRatio < 10) {
+                detectedZoom = Math.round(screenRatio * 100) / 100;
               }
-              
-              document.body.removeChild(testDiv);
             }
             
-            // Method 3: Screen width comparison (additional validation)
-            if (screen.width && window.innerWidth) {
-              const screenBasedZoom = screen.width / window.innerWidth;
-              // Use screen-based zoom if it seems more accurate
-              if (Math.abs(screenBasedZoom - detectedZoom) < 0.1 && screenBasedZoom > 0.5 && screenBasedZoom < 3) {
-                detectedZoom = (detectedZoom + screenBasedZoom) / 2; // Average for stability
-              }
-            }
-            
-            // Clamp zoom values to reasonable range and round to avoid float precision issues
-            detectedZoom = Math.round(Math.max(0.25, Math.min(5, detectedZoom)) * 100) / 100;
+            // Clamp to reasonable values
+            detectedZoom = Math.max(0.1, Math.min(10, detectedZoom));
             
           } catch (error) {
-            console.warn('Zoom detection failed, using previous value:', error);
-            detectedZoom = lastDetectedZoom;
+            console.warn('🔍 Zoom detection error:', error);
+            detectedZoom = 1;
           }
           
-          // Apply smoothing to prevent jitter
-          const smoothedZoom = lastDetectedZoom * 0.7 + detectedZoom * 0.3;
+          // Apply light smoothing to prevent jitter
+          const smoothedZoom = lastDetectedZoom * 0.8 + detectedZoom * 0.2;
           
           setBrowserZoom(prev => {
-            // Only update if there's a significant change (threshold: 0.02 for more sensitivity)
-            if (Math.abs(prev - smoothedZoom) > 0.02) {
-              console.log('Browser zoom changed:', prev.toFixed(3), '->', smoothedZoom.toFixed(3));
+            // 🔧 훨씬 더 보수적인 임계값 (10% 이상 변화시에만)
+            const threshold = 0.1;
+            if (Math.abs(prev - smoothedZoom) > threshold) {
+              console.log('🔍 Browser zoom changed (major):');
+              console.log('  From:', prev.toFixed(3), '→ To:', smoothedZoom.toFixed(3));
+              console.log('  Raw detected:', detectedZoom.toFixed(3));
+              console.log('  Threshold:', threshold);
+              console.log('---');
               lastDetectedZoom = smoothedZoom;
               return smoothedZoom;
             }
+            // 작은 변화는 무시하고 기존 값 유지
             return prev;
           });
-        }, 100); // Reduced debounce time for more responsive updates
+        }, 50); // Faster response time
       });
     };
 
     // Initial detection with slight delay
-    setTimeout(detectZoom, 100);
+    setTimeout(() => {
+      detectZoom();
+      
+      // Show initial state after detection
+      setTimeout(() => {
+        console.log('🚀 Initial Zoom State:');
+        console.log('  BrowserZoom:', browserZoom.toFixed(3));
+        console.log('  DevicePixelRatio:', window.devicePixelRatio?.toFixed(3));
+        if (window.visualViewport) {
+          console.log('  VisualViewport Scale:', window.visualViewport.scale?.toFixed(3));
+        }
+        console.log('---');
+      }, 200);
+    }, 100);
     
     // Listen for relevant events with passive listeners for better performance
     const events = ['resize', 'orientationchange', 'load'];
@@ -290,6 +353,29 @@ const CanvasView = () => {
       window.visualViewport.addEventListener('resize', detectZoom, { passive: true });
       window.visualViewport.addEventListener('scroll', detectZoom, { passive: true });
     }
+    
+    // Listen for wheel events (Ctrl + Mouse Wheel zoom)
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        console.log('🎯 Ctrl+Wheel detected, triggering zoom detection');
+        setTimeout(detectZoom, 10);
+        setTimeout(detectZoom, 100);
+        setTimeout(detectZoom, 300);
+      }
+    };
+    
+    // Listen for key combinations that might change zoom
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '0')) {
+        console.log('🎯 Ctrl+Key zoom detected:', e.key);
+        setTimeout(detectZoom, 10);
+        setTimeout(detectZoom, 100);
+        setTimeout(detectZoom, 300);
+      }
+    };
+    
+    window.addEventListener('wheel', handleWheel);
+    window.addEventListener('keydown', handleKeyDown);
     
     // Additional event listeners for zoom detection
     // Note: wheel event with preventDefault needs non-passive listener
@@ -305,6 +391,8 @@ const CanvasView = () => {
       document.removeEventListener('gesturestart', detectZoom);
       document.removeEventListener('gesturechange', detectZoom);
       document.removeEventListener('gestureend', detectZoom);
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown);
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', detectZoom);
         window.visualViewport.removeEventListener('scroll', detectZoom);
@@ -610,23 +698,20 @@ const CanvasView = () => {
       return;
     }
 
+    // 🔧 DYNAMIC CANVAS: 동적 캔버스 크기 기준으로 상대 좌표 변환
     const rect = e.currentTarget.getBoundingClientRect();
-    // Get click coordinates relative to container
-    const rawX = e.clientX - rect.left;
-    const rawY = e.clientY - rect.top;
     
-    // Apply inverse transform to get actual canvas coordinates
-    // Calculate position in canvas coordinates, not affected by zoom/pan
-    const x = (rawX - panX) / zoom;
-    const y = (rawY - panY) / zoom;
+    // 클릭한 픽셀 위치 (컨테이너 기준)
+    const pixelX = e.clientX - rect.left;
+    const pixelY = e.clientY - rect.top;
     
-    // Convert to relative coordinates for storage
-    const relativeCoords = convertToRelativeCoords(x, y);
+    // 0-1 범위의 상대 좌표로 변환 (동적 캔버스 크기 기준)
+    const relativeCoords = convertToRelativeCoords(pixelX, pixelY, canvasDimensions.width, canvasDimensions.height);
     
-    console.log('Click coordinates:', { 
-      rawX, rawY, x, y, zoom, panX, panY, browserZoom,
-      relative: relativeCoords
-    });
+    console.log('📍 Pin Click (DYNAMIC CANVAS MODE):');
+    console.log('  Click:', `(${e.clientX}, ${e.clientY}) Canvas: ${canvasDimensions.width}×${canvasDimensions.height}`);
+    console.log('  Raw→Relative:', `(${pixelX.toFixed(1)}, ${pixelY.toFixed(1)}) → (${relativeCoords.x.toFixed(4)}, ${relativeCoords.y.toFixed(4)})`);
+    console.log('---');
 
     // 선택된 템플릿이 있으면 사용, 없으면 기본 템플릿 사용
     const templateToUse = selectedPinTemplate || pinTemplates.find(t => t.isDefault) || pinTemplates[0];
@@ -634,8 +719,8 @@ const CanvasView = () => {
     if (templateToUse) {
       const newPin: PinData = {
         id: `temp-pin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        x,
-        y,
+        x: relativeCoords.x,  // 상대 좌표 사용
+        y: relativeCoords.y,  // 상대 좌표 사용
         title: '새 핀',
         description: '핀 설명을 입력하세요',
         layerId: selectedLayerId,
@@ -686,12 +771,10 @@ const CanvasView = () => {
         const isHardcodedTemplate = updatedPin.templateId && 
           (updatedPin.templateId.startsWith('custom-') || updatedPin.templateId.startsWith('default-'));
         
-        // 절대 좌표를 상대 좌표로 변환
-        const pinRelativeCoords = convertToRelativeCoords(updatedPin.x, updatedPin.y);
-        
+        // 🔧 RELATIVE COORDS: 상대 좌표로 직접 저장
         const insertData = {
-          x: pinRelativeCoords.x,
-          y: pinRelativeCoords.y,
+          x: updatedPin.x,  // 이미 0-1 범위의 상대 좌표
+          y: updatedPin.y,  // 이미 0-1 범위의 상대 좌표
           title: updatedPin.title,
           description: updatedPin.description,
           layer_id: updatedPin.layerId,
@@ -732,12 +815,10 @@ const CanvasView = () => {
         const isHardcodedTemplate = updatedPin.templateId && 
           (updatedPin.templateId.startsWith('custom-') || updatedPin.templateId.startsWith('default-'));
         
-        // 절대 좌표를 상대 좌표로 변환
-        const updateRelativeCoords = convertToRelativeCoords(updatedPin.x, updatedPin.y);
-        
+        // 🔧 RELATIVE COORDS: 상대 좌표로 직접 저장
         const updateData = {
-          x: updateRelativeCoords.x,
-          y: updateRelativeCoords.y,
+          x: updatedPin.x,  // 이미 0-1 범위의 상대 좌표
+          y: updatedPin.y,  // 이미 0-1 범위의 상대 좌표
           title: updatedPin.title,
           layer_id: updatedPin.layerId,
           template_id: isHardcodedTemplate ? null : updatedPin.templateId,
@@ -804,12 +885,11 @@ const CanvasView = () => {
     setSelectedPin(null);
   };
 
-  const handlePinPositionChange = async (pinId: string, x: number, y: number) => {
-    // 절대 좌표를 상대 좌표로 변환
-    const relativeCoords = convertToRelativeCoords(x, y);
+  const handlePinPositionChange = async (pinId: string, relativeX: number, relativeY: number) => {
+    // 🔧 RELATIVE COORDS: 상대 좌표로 직접 처리
     // 먼저 로컬 상태 업데이트 (즉시 UI 반영)
     const updatedPins = pins.map(pin => 
-      pin.id === pinId ? { ...pin, x, y } : pin
+      pin.id === pinId ? { ...pin, x: relativeX, y: relativeY } : pin
     );
     setPins(updatedPins);
 
@@ -818,8 +898,8 @@ const CanvasView = () => {
       const { error } = await supabase
         .from('pins')
         .update({ 
-          x: relativeCoords.x, 
-          y: relativeCoords.y 
+          x: relativeX, 
+          y: relativeY 
         })
         .eq('id', pinId);
 
@@ -827,8 +907,7 @@ const CanvasView = () => {
 
       console.log('Pin position updated (relative):', { 
         pinId, 
-        absolute: { x, y },
-        relative: relativeCoords
+        relative: { x: relativeX, y: relativeY }
       });
 
     } catch (error) {
@@ -1438,17 +1517,16 @@ const CanvasView = () => {
           <div
             ref={canvasContainerRef}
             id="main-canvas"
-            className={`relative bg-white rounded-lg shadow-lg overflow-hidden ${isPresentationMode ? 'w-full h-full cursor-default' : 'cursor-crosshair'}`}
+            className={`relative bg-white rounded-lg shadow-lg overflow-hidden mx-auto ${isPresentationMode ? 'cursor-default' : 'cursor-crosshair'}`}
             style={{ 
-              minHeight: isPresentationMode ? '100vh' : '600px',
-              width: isPresentationMode ? '100vw' : 'auto',
+              width: isPresentationMode ? '100vw' : `${canvasDimensions.width}px`,
+              height: isPresentationMode ? '100vh' : `${canvasDimensions.height}px`,
               backgroundColor: canvas.backgroundType === 'color' ? canvas.backgroundColor : '#ffffff',
               backgroundImage: canvas.backgroundType === 'image' && canvas.backgroundImageUrl ? 
                 `url(${canvas.backgroundImageUrl})` : 'none',
               backgroundSize: 'contain',
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',
-
             }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
@@ -1459,21 +1537,30 @@ const CanvasView = () => {
               style={{
                 transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
                 transformOrigin: '0 0',
-                minHeight: '600px'
+                width: `${canvasDimensions.width}px`,
+                height: `${canvasDimensions.height}px`
               }}
             >
             {canvas.imageUrl && canvas.imageUrl !== '/placeholder.svg' ? (
               <img
+                ref={canvasImageRef}
                 src={canvas.imageUrl}
                 alt={canvas.title}
-                className="w-full h-full object-contain"
-                style={{ minHeight: '600px' }}
+                className="w-full h-full object-cover"
+                style={{ 
+                  width: `${canvasDimensions.width}px`,
+                  height: `${canvasDimensions.height}px`
+                }}
+                onLoad={handleImageLoad}
               />
             ) : (
               canvas.backgroundType === 'color' && canvas.backgroundColor === '#ffffff' && (
                 <div 
                   className="w-full h-full flex items-center justify-center text-gray-300"
-                  style={{ minHeight: '600px' }}
+                  style={{ 
+                    width: `${canvasDimensions.width}px`,
+                    height: `${canvasDimensions.height}px`
+                  }}
                 >
                   <div className="text-center">
                     <Image className="w-16 h-16 mx-auto mb-4 opacity-20" />
@@ -1486,22 +1573,18 @@ const CanvasView = () => {
             
             {/* Pins */}
             {getVisiblePins().map((pin) => {
-              // 좌표가 이미 절대값인지 상대값인지 감지
-              const isRelativeCoord = pin.x <= 1 && pin.y <= 1;
-              
-              let finalCoords;
-              if (isRelativeCoord) {
-                // 상대 좌표를 절대 좌표로 변환
-                finalCoords = convertToAbsoluteCoords(pin.x, pin.y);
-              } else {
-                // 이미 절대 좌표인 경우 그대로 사용
-                finalCoords = { x: pin.x, y: pin.y };
-              }
+              // 🔧 DYNAMIC CANVAS: 상대 좌표를 동적 캔버스 크기 기준 절대 좌표로 변환
+              const absoluteCoords = convertToAbsoluteCoords(
+                pin.x, 
+                pin.y, 
+                canvasDimensions.width, 
+                canvasDimensions.height
+              );
               
               const pinWithAbsoluteCoords = {
                 ...pin,
-                x: finalCoords.x,
-                y: finalCoords.y
+                x: absoluteCoords.x,
+                y: absoluteCoords.y
               };
               
               return (
@@ -1514,10 +1597,8 @@ const CanvasView = () => {
                   layerColor={getLayerColor(pin.layerId)}
                   onPositionChange={handlePinPositionChange}
                   canEdit={canEdit && !isPresentationMode}
-                  zoom={isPresentationMode ? 1 : zoom}
-                  panX={isPresentationMode ? 0 : panX}
-                  panY={isPresentationMode ? 0 : panY}
-                  browserZoom={1}
+                  containerWidth={canvasDimensions.width}
+                  containerHeight={canvasDimensions.height}
                 />
               );
             })}

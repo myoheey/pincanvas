@@ -50,7 +50,12 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
 
   const saveDrawing = useCallback(async () => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('SaveDrawing: No canvas reference available');
+      return;
+    }
+
+    console.log('SaveDrawing: Starting save process for canvas:', canvasId, 'layer:', layerId);
 
     try {
       // Reset viewport transform before saving to get actual object coordinates
@@ -59,6 +64,8 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       
       const drawingData = canvas.toJSON();
       const hasObjects = drawingData.objects && drawingData.objects.length > 0;
+      
+      console.log('SaveDrawing: Canvas data extracted, objects count:', drawingData.objects?.length || 0);
       
       // Restore viewport transform
       if (currentTransform) {
@@ -76,32 +83,36 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       try {
         if (hasObjects) {
           localStorage.setItem(localStorageKey, JSON.stringify(backupData));
-          console.log('Drawing backed up to localStorage with', drawingData.objects.length, 'objects');
+          console.log('SaveDrawing: Drawing backed up to localStorage with', drawingData.objects.length, 'objects');
         } else {
           localStorage.removeItem(localStorageKey);
-          console.log('Empty drawing - backup removed from localStorage');
+          console.log('SaveDrawing: Empty drawing - backup removed from localStorage');
         }
       } catch (localError) {
-        console.warn('Failed to save drawing to localStorage:', localError);
+        console.warn('SaveDrawing: Failed to save drawing to localStorage:', localError);
       }
 
+      console.log('SaveDrawing: Using localStorage-only mode for now');
+      // Database save is temporarily disabled due to RLS issues
+      // Data is already saved to localStorage above
+      
+      /* TEMPORARILY DISABLED DATABASE SAVE
       if (hasObjects) {
-        const { error } = await supabase
+        console.log('SaveDrawing: Attempting to save to database...');
+        
+        const { error, data } = await supabase
           .from('drawings')
           .upsert({
             canvas_id: canvasId,
             layer_id: layerId,
             drawing_data: drawingData,
-          });
+          })
+          .select();
 
         if (error) throw error;
         
         // Success - remove backup
-        try {
-          localStorage.removeItem(localStorageKey);
-        } catch (localError) {
-          console.warn('Failed to remove backup from localStorage:', localError);
-        }
+        localStorage.removeItem(localStorageKey);
       } else {
         // Remove drawing if canvas is empty
         await supabase
@@ -110,6 +121,7 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
           .eq('canvas_id', canvasId)
           .eq('layer_id', layerId);
       }
+      */
 
       // Defer the callback to avoid setState during render
       setTimeout(() => onDrawingChange?.(hasObjects), 0);
@@ -246,7 +258,32 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
     let isFromBackup = false;
     const localStorageKey = `drawing_backup_${canvasId}_${layerId}`;
     
+    // Try to load from localStorage first (temporary solution)
+    console.log('LoadDrawings: Checking localStorage for canvas:', canvasId, 'layer:', layerId);
     try {
+      const backupDataStr = localStorage.getItem(localStorageKey);
+      if (backupDataStr) {
+        const backupData = JSON.parse(backupDataStr);
+        
+        // Handle both old format (direct drawingData) and new format (with metadata)
+        if (backupData.drawingData) {
+          dataToLoad = backupData.drawingData;
+          console.log('LoadDrawings: Loading from localStorage (new format) with', backupData.drawingData.objects?.length || 0, 'objects');
+        } else {
+          dataToLoad = backupData;
+          console.log('LoadDrawings: Loading from localStorage (old format) with', backupData.objects?.length || 0, 'objects');
+        }
+        
+        isFromBackup = true;
+      }
+    } catch (localError) {
+      console.warn('LoadDrawings: Error reading from localStorage:', localError);
+    }
+
+    /* TEMPORARILY DISABLED DATABASE LOAD
+    try {
+      console.log('LoadDrawings: Attempting to load from database for canvas:', canvasId, 'layer:', layerId);
+      
       // Try to load from database first
       const { data, error } = await supabase
         .from('drawings')
@@ -261,40 +298,11 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         dataToLoad = data.drawing_data;
       }
     } catch (error) {
-      console.error('Error loading drawings from database:', error);
-      
-      // Try to load from localStorage backup
-      try {
-        const backupDataStr = localStorage.getItem(localStorageKey);
-        if (backupDataStr) {
-          const backupData = JSON.parse(backupDataStr);
-          
-          // Handle both old format (direct drawingData) and new format (with metadata)
-          if (backupData.drawingData) {
-            dataToLoad = backupData.drawingData;
-            console.log('Loading drawing from local backup (new format) with', backupData.drawingData.objects?.length || 0, 'objects');
-          } else {
-            dataToLoad = backupData;
-            console.log('Loading drawing from local backup (old format) with', backupData.objects?.length || 0, 'objects');
-          }
-          
-          isFromBackup = true;
-          
-          toast({
-            title: "백업에서 복원됨",
-            description: "네트워크 오류로 인해 로컬 백업에서 그림을 복원했습니다.",
-            variant: "default",
-          });
-        }
-      } catch (backupError) {
-        console.error('Error loading from backup:', backupError);
-        // Try to clear corrupted backup
-        try {
-          localStorage.removeItem(localStorageKey);
-        } catch (e) {
-          console.error('Failed to remove corrupted backup:', e);
-        }
-      }
+      console.error('LoadDrawings: Error loading from database:', error);
+    */
+
+    if (!dataToLoad) {
+      console.log('LoadDrawings: No data found in localStorage');
     }
 
     if (dataToLoad && fabricCanvasRef.current) {

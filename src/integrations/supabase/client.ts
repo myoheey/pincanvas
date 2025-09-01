@@ -2,8 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = "https://bqytxnzogkaufdrsmsfj.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeXR4bnpvZ2thdWZkcnNtc2ZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NTc4NzEzMSwiZXhwIjoyMDcxMzYzMTMxfQ.iGTKz7Bu2V1FMhS7N29Bc-8oeeqwO_BEoPI6UJv_uWM";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -17,10 +17,16 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   global: {
     headers: {
       'apikey': SUPABASE_PUBLISHABLE_KEY,
-      'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`
+      'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      'Prefer': 'return=representation',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
     }
+  },
+  db: {
+    schema: 'public'
   }
 });
 
 // 디버깅을 위해 콘솔에 출력
-console.log('Supabase client initialized with service_role key:', SUPABASE_PUBLISHABLE_KEY.substring(0, 50) + '...');
+console.log('Supabase client initialized with service_role key (development mode):', SUPABASE_PUBLISHABLE_KEY.substring(0, 50) + '...');

@@ -39,12 +39,10 @@ interface PinRendererProps {
   onClick: () => void;
   isVisible: boolean;
   layerColor?: string;
-  onPositionChange?: (pinId: string, x: number, y: number) => void;
+  onPositionChange?: (pinId: string, relativeX: number, relativeY: number) => void;
   canEdit?: boolean;
-  zoom?: number;
-  panX?: number;
-  panY?: number;
-  browserZoom?: number;
+  containerWidth?: number;
+  containerHeight?: number;
 }
 
 const shapeComponents = {
@@ -83,10 +81,8 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
   layerColor,
   onPositionChange,
   canEdit = false,
-  zoom = 1,
-  panX = 0,
-  panY = 0,
-  browserZoom = 1,
+  containerWidth = 1200,
+  containerHeight = 800,
 }) => {
   // 하드코딩된 템플릿 ID를 매핑하는 함수
   const getHardcodedTemplate = (templateId: string): PinTemplate | null => {
@@ -177,12 +173,27 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
       }
       
       if (hasMoved) {
+        // 🔧 FIXED CANVAS: 픽셀 이동을 상대 좌표로 변환
+        const newAbsoluteX = startPinX + deltaX;
+        const newAbsoluteY = startPinY + deltaY;
+        
+        // 고정 캔버스 경계 내로 제한
+        const clampedX = Math.max(0, Math.min(containerWidth, newAbsoluteX));
+        const clampedY = Math.max(0, Math.min(containerHeight, newAbsoluteY));
+        
+        // 상대 좌표로 변환 (고정 캔버스 크기 기준)
+        const relativeX = clampedX / containerWidth;
+        const relativeY = clampedY / containerHeight;
+        
+        // UI에는 절대 좌표로 표시
         const newPos = {
-          x: startPinX + deltaX / zoom,
-          y: startPinY + deltaY / zoom
+          x: clampedX,
+          y: clampedY
         };
         setCurrentPosition(newPos);
-        finalPositionRef.current = newPos;
+        
+        // 상대 좌표로 저장 준비
+        finalPositionRef.current = { x: relativeX, y: relativeY };
       }
     };
     
@@ -220,8 +231,8 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
           canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
         }`}
         style={{
-          left: Math.round(currentPosition.x * zoom + panX) - size / 2,
-          top: Math.round(currentPosition.y * zoom + panY) - size / 2,
+          left: Math.round(currentPosition.x) - size / 2,
+          top: Math.round(currentPosition.y) - size / 2,
           zIndex: isDragging ? 30 : 20,
         }}
         onMouseDown={handleMouseDown}
@@ -260,8 +271,8 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
         canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
       }`}
       style={{
-        left: Math.round(currentPosition.x * zoom + panX) - size / 2,
-        top: Math.round(currentPosition.y * zoom + panY) - size / 2,
+        left: Math.round(currentPosition.x) - size / 2,
+        top: Math.round(currentPosition.y) - size / 2,
         zIndex: isDragging ? 30 : 20,
       }}
       onMouseDown={handleMouseDown}
