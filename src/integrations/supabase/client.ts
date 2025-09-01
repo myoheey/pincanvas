@@ -3,25 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: localStorage,
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-  global: {
-    headers: {
-      'apikey': SUPABASE_PUBLISHABLE_KEY,
-      'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-      'Prefer': 'return=representation',
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    }
+    persistSession: true,
+    autoRefreshToken: true,
   },
   db: {
     schema: 'public'
@@ -29,4 +20,4 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 });
 
 // 디버깅을 위해 콘솔에 출력
-console.log('Supabase client initialized with service_role key (development mode):', SUPABASE_PUBLISHABLE_KEY.substring(0, 50) + '...');
+console.log('Supabase client initialized with anon key:', SUPABASE_ANON_KEY.substring(0, 50) + '...');

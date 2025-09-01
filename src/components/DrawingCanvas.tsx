@@ -62,10 +62,47 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       const currentTransform = canvas.viewportTransform;
       canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
       
-      const drawingData = canvas.toJSON();
-      const hasObjects = drawingData.objects && drawingData.objects.length > 0;
+      const rawDrawingData = canvas.toJSON();
+      const hasObjects = rawDrawingData.objects && rawDrawingData.objects.length > 0;
       
-      console.log('SaveDrawing: Canvas data extracted, objects count:', drawingData.objects?.length || 0);
+      console.log('SaveDrawing: Canvas data extracted, objects count:', rawDrawingData.objects?.length || 0);
+      
+      // 🔧 COORDINATE CONVERSION: Convert absolute coordinates to relative coordinates
+      const canvasWidth = canvas.width || 1200;
+      const canvasHeight = canvas.height || 800;
+      
+      const drawingData = {
+        ...rawDrawingData,
+        objects: rawDrawingData.objects?.map(obj => {
+          if (obj.type === 'Path' && obj.path) {
+            // Convert path coordinates to relative (0-1 range)
+            const relativeObj = {
+              ...obj,
+              left: obj.left / canvasWidth,
+              top: obj.top / canvasHeight,
+              path: obj.path.map(segment => {
+                if (Array.isArray(segment)) {
+                  return segment.map((point, index) => {
+                    if (index === 0) return point; // Command letter (M, L, Q, etc.)
+                    if (typeof point === 'number') {
+                      // Convert coordinate
+                      return index % 2 === 1 ? point / canvasWidth : point / canvasHeight;
+                    }
+                    return point;
+                  });
+                }
+                return segment;
+              })
+            };
+            console.log('SaveDrawing: Converted path from absolute to relative:', {
+              absolute: { left: obj.left, top: obj.top, pathSample: obj.path[0] },
+              relative: { left: relativeObj.left, top: relativeObj.top, pathSample: relativeObj.path[0] }
+            });
+            return relativeObj;
+          }
+          return obj;
+        }) || []
+      };
       
       // Restore viewport transform
       if (currentTransform) {
@@ -92,36 +129,53 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         console.warn('SaveDrawing: Failed to save drawing to localStorage:', localError);
       }
 
-      console.log('SaveDrawing: Using localStorage-only mode for now');
-      // Database save is temporarily disabled due to RLS issues
-      // Data is already saved to localStorage above
-      
-      /* TEMPORARILY DISABLED DATABASE SAVE
-      if (hasObjects) {
-        console.log('SaveDrawing: Attempting to save to database...');
-        
-        const { error, data } = await supabase
-          .from('drawings')
-          .upsert({
-            canvas_id: canvasId,
-            layer_id: layerId,
-            drawing_data: drawingData,
-          })
-          .select();
+      // 🔧 RE-ENABLED: Database save with improved error handling
+      try {
+        if (hasObjects) {
+          console.log('SaveDrawing: Attempting to save to database...');
+          
+          const { error, data } = await supabase
+            .from('drawings')
+            .upsert({
+              canvas_id: canvasId,
+              layer_id: layerId,
+              drawing_data: drawingData,
+            })
+            .select();
 
-        if (error) throw error;
-        
-        // Success - remove backup
-        localStorage.removeItem(localStorageKey);
-      } else {
-        // Remove drawing if canvas is empty
-        await supabase
-          .from('drawings')
-          .delete()
-          .eq('canvas_id', canvasId)
-          .eq('layer_id', layerId);
+          if (error) {
+            console.error('SaveDrawing: Database save failed:', error);
+            console.log('SaveDrawing: Keeping localStorage backup');
+            // Keep localStorage backup on database failure
+          } else {
+            console.log('SaveDrawing: Successfully saved to database');
+            // Success - remove localStorage backup
+            try {
+              localStorage.removeItem(localStorageKey);
+              console.log('SaveDrawing: Removed localStorage backup after successful database save');
+            } catch (localError) {
+              console.warn('SaveDrawing: Failed to remove localStorage backup:', localError);
+            }
+          }
+        } else {
+          console.log('SaveDrawing: Removing empty drawing from database...');
+          // Remove drawing if canvas is empty
+          const { error } = await supabase
+            .from('drawings')
+            .delete()
+            .eq('canvas_id', canvasId)
+            .eq('layer_id', layerId);
+            
+          if (error) {
+            console.error('SaveDrawing: Database delete failed:', error);
+          } else {
+            console.log('SaveDrawing: Successfully removed empty drawing from database');
+          }
+        }
+      } catch (dbError) {
+        console.error('SaveDrawing: Database operation failed:', dbError);
+        console.log('SaveDrawing: Drawing is still saved in localStorage');
       }
-      */
 
       // Defer the callback to avoid setState during render
       setTimeout(() => onDrawingChange?.(hasObjects), 0);
@@ -258,51 +312,59 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
     let isFromBackup = false;
     const localStorageKey = `drawing_backup_${canvasId}_${layerId}`;
     
-    // Try to load from localStorage first (temporary solution)
-    console.log('LoadDrawings: Checking localStorage for canvas:', canvasId, 'layer:', layerId);
-    try {
-      const backupDataStr = localStorage.getItem(localStorageKey);
-      if (backupDataStr) {
-        const backupData = JSON.parse(backupDataStr);
-        
-        // Handle both old format (direct drawingData) and new format (with metadata)
-        if (backupData.drawingData) {
-          dataToLoad = backupData.drawingData;
-          console.log('LoadDrawings: Loading from localStorage (new format) with', backupData.drawingData.objects?.length || 0, 'objects');
-        } else {
-          dataToLoad = backupData;
-          console.log('LoadDrawings: Loading from localStorage (old format) with', backupData.objects?.length || 0, 'objects');
-        }
-        
-        isFromBackup = true;
-      }
-    } catch (localError) {
-      console.warn('LoadDrawings: Error reading from localStorage:', localError);
-    }
-
-    /* TEMPORARILY DISABLED DATABASE LOAD
+    // 🔧 RE-ENABLED: Try to load from database first, fallback to localStorage
     try {
       console.log('LoadDrawings: Attempting to load from database for canvas:', canvasId, 'layer:', layerId);
       
-      // Try to load from database first
+      // Try to load from database first - get the most recent drawing
       const { data, error } = await supabase
         .from('drawings')
         .select('drawing_data')
         .eq('canvas_id', canvasId)
         .eq('layer_id', layerId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
-
-      if (data && data.drawing_data) {
+      if (error) {
+        console.error('LoadDrawings: Database load failed:', error);
+      } else if (data && data.drawing_data) {
+        console.log('LoadDrawings: Loading from database with', data.drawing_data.objects?.length || 0, 'objects');
         dataToLoad = data.drawing_data;
+      } else {
+        console.log('LoadDrawings: No data found in database');
       }
     } catch (error) {
       console.error('LoadDrawings: Error loading from database:', error);
-    */
+    }
+
+    // Fallback to localStorage if database load failed or returned no data
+    if (!dataToLoad) {
+      console.log('LoadDrawings: Checking localStorage backup for canvas:', canvasId, 'layer:', layerId);
+      try {
+        const backupDataStr = localStorage.getItem(localStorageKey);
+        if (backupDataStr) {
+          const backupData = JSON.parse(backupDataStr);
+          
+          // Handle both old format (direct drawingData) and new format (with metadata)
+          if (backupData.drawingData) {
+            dataToLoad = backupData.drawingData;
+            console.log('LoadDrawings: Loading from localStorage (new format) with', backupData.drawingData.objects?.length || 0, 'objects');
+          } else {
+            dataToLoad = backupData;
+            console.log('LoadDrawings: Loading from localStorage (old format) with', backupData.objects?.length || 0, 'objects');
+          }
+          
+          isFromBackup = true;
+        }
+      } catch (localError) {
+        console.warn('LoadDrawings: Error reading from localStorage:', localError);
+      }
+    }
+
 
     if (!dataToLoad) {
-      console.log('LoadDrawings: No data found in localStorage');
+      console.log('LoadDrawings: No drawing data found in database or localStorage');
     }
 
     if (dataToLoad && fabricCanvasRef.current) {
@@ -310,7 +372,56 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       // Reset viewport transform before loading
       fabricCanvasRef.current.setViewportTransform([1, 0, 0, 1, 0, 0]);
       
-      fabricCanvasRef.current.loadFromJSON(dataToLoad as any, () => {
+      // 🔧 COORDINATE CONVERSION: Convert relative coordinates back to absolute coordinates
+      const canvas = fabricCanvasRef.current;
+      const canvasWidth = canvas.width || 1200;
+      const canvasHeight = canvas.height || 800;
+      
+      // Check if data uses relative coordinates (values between 0-1) or absolute coordinates
+      const hasRelativeCoords = dataToLoad.objects?.some(obj => 
+        obj.left && obj.left <= 1 && obj.top && obj.top <= 1
+      );
+      
+      let processedData = dataToLoad;
+      if (hasRelativeCoords) {
+        console.log('LoadDrawings: Converting relative coordinates to absolute');
+        processedData = {
+          ...dataToLoad,
+          objects: dataToLoad.objects?.map(obj => {
+            if (obj.type === 'Path' && obj.path && obj.left <= 1 && obj.top <= 1) {
+              // Convert relative coordinates back to absolute
+              const absoluteObj = {
+                ...obj,
+                left: obj.left * canvasWidth,
+                top: obj.top * canvasHeight,
+                path: obj.path.map(segment => {
+                  if (Array.isArray(segment)) {
+                    return segment.map((point, index) => {
+                      if (index === 0) return point; // Command letter (M, L, Q, etc.)
+                      if (typeof point === 'number') {
+                        // Convert coordinate back to absolute
+                        return index % 2 === 1 ? point * canvasWidth : point * canvasHeight;
+                      }
+                      return point;
+                    });
+                  }
+                  return segment;
+                })
+              };
+              console.log('LoadDrawings: Converted path from relative to absolute:', {
+                relative: { left: obj.left, top: obj.top },
+                absolute: { left: absoluteObj.left, top: absoluteObj.top }
+              });
+              return absoluteObj;
+            }
+            return obj;
+          }) || []
+        };
+      } else {
+        console.log('LoadDrawings: Using existing absolute coordinates');
+      }
+      
+      fabricCanvasRef.current.loadFromJSON(processedData as any, () => {
         const canvas = fabricCanvasRef.current;
         if (canvas) {
           // Apply current viewport transform after loading
