@@ -288,7 +288,7 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       resizeObserver.disconnect();
       canvas.dispose();
     };
-  }, [canvasId, layerId, containerRef, onUndoStackChange, onRedoStackChange]);
+  }, [canvasId, containerRef, onUndoStackChange, onRedoStackChange]);
 
   // Update viewport transform when zoom/pan changes
   useEffect(() => {
@@ -324,7 +324,7 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         .eq('layer_id', layerId)
         .order('updated_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('LoadDrawings: Database load failed:', error);

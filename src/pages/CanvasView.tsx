@@ -1603,30 +1603,45 @@ const CanvasView = () => {
               );
             })}
 
-            {/* Drawing Canvas - always visible */}
-            {selectedLayerId && (
-              <DrawingCanvas
-                ref={drawingCanvasRef}
-                canvasId={id || ''}
-                layerId={selectedLayerId}
-                containerRef={canvasContainerRef}
-                tool={drawingTool}
-                brushSize={brushSize}
-                brushColor={brushColor}
-                lineStyle={lineStyle}
-                zoom={zoom}
-                panX={panX}
-                panY={panY}
-                onDrawingChange={() => {
-                  // Drawing change handler - removed problematic layer state update
+            {/* Drawing Canvas - render for all visible layers */}
+            {layers.map((layer) => (
+              <div 
+                key={`drawing-${layer.id}`}
+                style={{ 
+                  display: layer.visible ? 'block' : 'none',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  pointerEvents: selectedLayerId === layer.id ? 'auto' : 'none'
                 }}
-                onUndoStackChange={setUndoStack}
-                onRedoStackChange={setRedoStack}
-                onDeleteSelected={() => {
-                  drawingCanvasRef.current?.deleteSelected();
-                }}
-              />
-            )}
+              >
+                <DrawingCanvas
+                  ref={selectedLayerId === layer.id ? drawingCanvasRef : undefined}
+                  canvasId={id || ''}
+                  layerId={layer.id}
+                  containerRef={canvasContainerRef}
+                  tool={selectedLayerId === layer.id ? drawingTool : 'select'}
+                  brushSize={brushSize}
+                  brushColor={brushColor}
+                  lineStyle={lineStyle}
+                  zoom={zoom}
+                  panX={panX}
+                  panY={panY}
+                  onDrawingChange={() => {
+                    // Drawing change handler - removed problematic layer state update
+                  }}
+                  onUndoStackChange={selectedLayerId === layer.id ? setUndoStack : undefined}
+                  onRedoStackChange={selectedLayerId === layer.id ? setRedoStack : undefined}
+                  onDeleteSelected={() => {
+                    if (selectedLayerId === layer.id) {
+                      drawingCanvasRef.current?.deleteSelected();
+                    }
+                  }}
+                />
+              </div>
+            ))}
             </div>
           </div>
         </div>
