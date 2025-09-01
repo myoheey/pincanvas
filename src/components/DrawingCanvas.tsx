@@ -92,14 +92,10 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         console.warn('SaveDrawing: Failed to save drawing to localStorage:', localError);
       }
 
-      console.log('SaveDrawing: Using localStorage-only mode for now');
-      // Database save is temporarily disabled due to RLS issues
-      // Data is already saved to localStorage above
+      console.log('SaveDrawing: Attempting to save to database...');
       
-      /* TEMPORARILY DISABLED DATABASE SAVE
+      // Try to save to database (works for both authenticated and anonymous users)
       if (hasObjects) {
-        console.log('SaveDrawing: Attempting to save to database...');
-        
         const { error, data } = await supabase
           .from('drawings')
           .upsert({
@@ -109,10 +105,14 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
           })
           .select();
 
-        if (error) throw error;
-        
-        // Success - remove backup
-        localStorage.removeItem(localStorageKey);
+        if (error) {
+          console.warn('SaveDrawing: Database save failed, keeping local backup:', error);
+          // Keep local backup if database save fails
+        } else {
+          console.log('SaveDrawing: Successfully saved to database');
+          // Success - remove backup since data is now in database
+          localStorage.removeItem(localStorageKey);
+        }
       } else {
         // Remove drawing if canvas is empty
         await supabase
@@ -120,8 +120,10 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
           .delete()
           .eq('canvas_id', canvasId)
           .eq('layer_id', layerId);
+        
+        // Also remove local backup
+        localStorage.removeItem(localStorageKey);
       }
-      */
 
       // Defer the callback to avoid setState during render
       setTimeout(() => onDrawingChange?.(hasObjects), 0);
@@ -245,7 +247,7 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
     const vpt = canvas.viewportTransform;
     if (vpt) {
       // Apply zoom and pan transformation while preserving object positions
-      const newTransform = [zoom, 0, 0, zoom, panX, panY];
+      const newTransform: [number, number, number, number, number, number] = [zoom, 0, 0, zoom, panX, panY];
       canvas.setViewportTransform(newTransform);
       canvas.renderAll();
       
@@ -258,33 +260,10 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
     let isFromBackup = false;
     const localStorageKey = `drawing_backup_${canvasId}_${layerId}`;
     
-    // Try to load from localStorage first (temporary solution)
-    console.log('LoadDrawings: Checking localStorage for canvas:', canvasId, 'layer:', layerId);
+    // Try to load from database first, then fallback to localStorage
+    console.log('LoadDrawings: Attempting to load from database for canvas:', canvasId, 'layer:', layerId);
+    
     try {
-      const backupDataStr = localStorage.getItem(localStorageKey);
-      if (backupDataStr) {
-        const backupData = JSON.parse(backupDataStr);
-        
-        // Handle both old format (direct drawingData) and new format (with metadata)
-        if (backupData.drawingData) {
-          dataToLoad = backupData.drawingData;
-          console.log('LoadDrawings: Loading from localStorage (new format) with', backupData.drawingData.objects?.length || 0, 'objects');
-        } else {
-          dataToLoad = backupData;
-          console.log('LoadDrawings: Loading from localStorage (old format) with', backupData.objects?.length || 0, 'objects');
-        }
-        
-        isFromBackup = true;
-      }
-    } catch (localError) {
-      console.warn('LoadDrawings: Error reading from localStorage:', localError);
-    }
-
-    /* TEMPORARILY DISABLED DATABASE LOAD
-    try {
-      console.log('LoadDrawings: Attempting to load from database for canvas:', canvasId, 'layer:', layerId);
-      
-      // Try to load from database first
       const { data, error } = await supabase
         .from('drawings')
         .select('drawing_data')
@@ -292,17 +271,45 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
         .eq('layer_id', layerId)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
-
-      if (data && data.drawing_data) {
+      if (error && error.code !== 'PGRST116') {
+        console.warn('LoadDrawings: Database load failed:', error);
+      } else if (data && data.drawing_data) {
         dataToLoad = data.drawing_data;
+        const drawingDataObj = dataToLoad as any;
+        console.log('LoadDrawings: Loading from database with', drawingDataObj.objects?.length || 0, 'objects');
+        // Remove local backup since we have database data
+        localStorage.removeItem(localStorageKey);
       }
     } catch (error) {
-      console.error('LoadDrawings: Error loading from database:', error);
-    */
+      console.warn('LoadDrawings: Database load error, trying localStorage:', error);
+    }
+
+    // Fallback to localStorage if database load failed or no data found
+    if (!dataToLoad) {
+      console.log('LoadDrawings: Checking localStorage for canvas:', canvasId, 'layer:', layerId);
+      try {
+        const backupDataStr = localStorage.getItem(localStorageKey);
+        if (backupDataStr) {
+          const backupData = JSON.parse(backupDataStr);
+          
+          // Handle both old format (direct drawingData) and new format (with metadata)
+          if (backupData.drawingData) {
+            dataToLoad = backupData.drawingData;
+            console.log('LoadDrawings: Loading from localStorage (new format) with', backupData.drawingData.objects?.length || 0, 'objects');
+          } else {
+            dataToLoad = backupData;
+            console.log('LoadDrawings: Loading from localStorage (old format) with', backupData.objects?.length || 0, 'objects');
+          }
+          
+          isFromBackup = true;
+        }
+      } catch (localError) {
+        console.warn('LoadDrawings: Error reading from localStorage:', localError);
+      }
+    }
 
     if (!dataToLoad) {
-      console.log('LoadDrawings: No data found in localStorage');
+      console.log('LoadDrawings: No data found in database or localStorage');
     }
 
     if (dataToLoad && fabricCanvasRef.current) {
