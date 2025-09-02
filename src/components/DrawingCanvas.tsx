@@ -288,7 +288,7 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       resizeObserver.disconnect();
       canvas.dispose();
     };
-  }, [canvasId, containerRef, onUndoStackChange, onRedoStackChange]);
+  }, [canvasId, containerRef]);
 
   // Update viewport transform when zoom/pan changes
   useEffect(() => {

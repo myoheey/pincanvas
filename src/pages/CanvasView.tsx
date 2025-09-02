@@ -176,8 +176,30 @@ const CanvasView = () => {
         imageHeight: naturalHeight
       } : null);
       
-      // 데이터베이스에도 업데이트 (선택적)
+      // 데이터베이스에도 업데이트 (disabled - schema not ready)
       // updateCanvasImageDimensions(naturalWidth, naturalHeight);
+    }
+  };
+
+  const updateCanvasImageDimensions = async (width: number, height: number) => {
+    if (!id || !canEdit) return;
+
+    try {
+      const { error } = await supabase
+        .from('canvases')
+        .update({
+          image_width: width,
+          image_height: height
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error updating canvas image dimensions:', error);
+      } else {
+        console.log('✅ Canvas image dimensions updated:', { width, height });
+      }
+    } catch (error) {
+      console.error('Error updating canvas image dimensions:', error);
     }
   };
   
@@ -506,6 +528,8 @@ const CanvasView = () => {
           backgroundType: (canvasData.background_type as 'color' | 'image') || 'color',
           backgroundColor: canvasData.background_color || '#ffffff',
           backgroundImageUrl: canvasData.background_image_url || undefined,
+          imageWidth: canvasData.image_width || undefined,
+          imageHeight: canvasData.image_height || undefined,
         });
 
         // 레이어 데이터 가져오기
@@ -1604,20 +1628,23 @@ const CanvasView = () => {
             })}
 
             {/* Drawing Canvas - render for all visible layers */}
-            {layers.map((layer) => (
+            {layers
+              .filter(layer => layer.visible)
+              .map((layer) => (
               <div 
                 key={`drawing-${layer.id}`}
                 style={{ 
-                  display: layer.visible ? 'block' : 'none',
                   position: 'absolute',
                   top: 0,
                   left: 0,
                   width: '100%',
                   height: '100%',
-                  pointerEvents: selectedLayerId === layer.id ? 'auto' : 'none'
+                  pointerEvents: selectedLayerId === layer.id ? 'auto' : 'none',
+                  zIndex: selectedLayerId === layer.id ? 100 : 1
                 }}
               >
                 <DrawingCanvas
+                  key={`canvas-${layer.id}`} // Stable key per layer
                   ref={selectedLayerId === layer.id ? drawingCanvasRef : undefined}
                   canvasId={id || ''}
                   layerId={layer.id}
@@ -1630,7 +1657,7 @@ const CanvasView = () => {
                   panX={panX}
                   panY={panY}
                   onDrawingChange={() => {
-                    // Drawing change handler - removed problematic layer state update
+                    // Drawing change handler - only for selected layer
                   }}
                   onUndoStackChange={selectedLayerId === layer.id ? setUndoStack : undefined}
                   onRedoStackChange={selectedLayerId === layer.id ? setRedoStack : undefined}

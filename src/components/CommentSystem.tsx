@@ -113,7 +113,7 @@ export const CommentSystem: React.FC<CommentSystemProps> = ({
     if (!allowLikes) return;
     
     const { data, error } = await supabase
-      .from('secure_likes')
+      .from('likes')
       .select('*')
       .eq('pin_id', pinId);
 
