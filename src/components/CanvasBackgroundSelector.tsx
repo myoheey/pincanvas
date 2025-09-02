@@ -101,6 +101,44 @@ const CanvasBackgroundSelector = ({
     });
   };
 
+  const cleanupOldBackgrounds = async () => {
+    try {
+      // 현재 캔버스 폴더의 모든 파일 조회
+      const { data: files, error } = await supabase.storage
+        .from('canvas-backgrounds')
+        .list(canvasId, {
+          limit: 100,
+          offset: 0,
+          sortBy: { column: 'created_at', order: 'desc' }
+        });
+
+      if (error) {
+        console.warn('파일 목록 조회 실패:', error);
+        return;
+      }
+
+      if (files && files.length > 0) {
+        console.log(`기존 배경 이미지 ${files.length}개 발견, 삭제 중...`);
+        
+        // 모든 기존 파일 삭제
+        const filesToDelete = files.map(file => `${canvasId}/${file.name}`);
+        
+        const { error: deleteError } = await supabase.storage
+          .from('canvas-backgrounds')
+          .remove(filesToDelete);
+
+        if (deleteError) {
+          console.warn('기존 파일 삭제 실패:', deleteError);
+        } else {
+          console.log('기존 배경 이미지 삭제 완료');
+        }
+      }
+    } catch (error) {
+      console.warn('기존 파일 정리 중 오류:', error);
+      // 정리 실패해도 업로드는 계속 진행
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -110,15 +148,18 @@ const CanvasBackgroundSelector = ({
       return;
     }
 
-    if (file.size > 50 * 1024 * 1024) { // 50MB limit (원본 파일 기준)
-      toast.error('파일 크기는 50MB 이하여야 합니다.');
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit 
+      toast.error('파일 크기는 10MB 이하여야 합니다.');
       return;
     }
 
     setIsUploading(true);
     
     try {
-      // 이미지 크기 조정 처리
+      // 1. 기존 배경 이미지들 삭제
+      await cleanupOldBackgrounds();
+      
+      // 2. 이미지 크기 조정 처리
       toast.success('이미지 최적화 중...');
       const processedFile = await processAndResizeImage(file);
       
@@ -126,11 +167,23 @@ const CanvasBackgroundSelector = ({
       const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `${canvasId}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('canvas-backgrounds')
-        .upload(filePath, processedFile);
+      console.log('Uploading to path:', filePath);
+      console.log('File size after processing:', processedFile.size);
 
-      if (uploadError) throw uploadError;
+      // 3. 새 이미지 업로드
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('canvas-backgrounds')
+        .upload(filePath, processedFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Upload error details:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload successful:', uploadData);
 
       const { data } = supabase.storage
         .from('canvas-backgrounds')
@@ -138,12 +191,28 @@ const CanvasBackgroundSelector = ({
 
       onBackgroundUpdate('image', undefined, data.publicUrl);
       setIsOpen(false);
-      toast.success('배경 이미지가 최적화되어 업로드되었습니다.');
-    } catch (error) {
+      toast.success('배경 이미지가 업로드되었습니다.');
+    } catch (error: any) {
       console.error('File upload error:', error);
-      toast.error('이미지 업로드에 실패했습니다.');
+      
+      // 더 자세한 에러 메시지 제공
+      let errorMessage = '이미지 업로드에 실패했습니다.';
+      
+      if (error?.message?.includes('Policy')) {
+        errorMessage = '업로드 권한이 없습니다. 로그인 상태를 확인해주세요.';
+      } else if (error?.message?.includes('size')) {
+        errorMessage = '파일 크기가 너무 큽니다.';
+      } else if (error?.message?.includes('duplicate')) {
+        errorMessage = '같은 이름의 파일이 이미 존재합니다.';
+      } else if (error?.message) {
+        errorMessage = `업로드 실패: ${error.message}`;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsUploading(false);
+      // 파일 입력 초기화
+      event.target.value = '';
     }
   };
 
