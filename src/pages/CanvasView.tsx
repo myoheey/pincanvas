@@ -1465,6 +1465,7 @@ const CanvasView = () => {
       if (type === 'color') {
         updateData.background_color = color;
         updateData.background_image_url = null;
+        updateData.image_url = null; // 기존 이미지 URL도 데이터베이스에서 제거
       } else if (type === 'image') {
         updateData.background_image_url = imageUrl;
       }
@@ -1506,15 +1507,45 @@ const CanvasView = () => {
         // 배경 제거 시 강제로 캔버스 재렌더링을 위해 key 변경을 위한 추가 상태 업데이트
         if (type === 'color') {
           console.log('🎨 Background removed, forcing canvas re-render');
-          setBackgroundUpdateKey(prev => prev + 1);
-          // 작은 딜레이 후 상태를 다시 설정하여 재렌더링 보장
+          
+          // 1. backgroundUpdateKey 강제 증가
+          const newKey = Date.now();
+          setBackgroundUpdateKey(newKey);
+          
+          // 2. DOM 요소 직접 조작으로 배경 이미지 강제 제거
+          const canvasElement = document.getElementById('main-canvas');
+          if (canvasElement) {
+            canvasElement.style.backgroundImage = 'none !important';
+            canvasElement.style.background = color || '#ffffff';
+            console.log('🧹 Directly removed background image from DOM with !important');
+          }
+          
+          // 3. 상태를 즉시 null로 설정 (imageUrl도 함께 정리)
+          setCanvas(prevCanvas => prevCanvas ? {
+            ...prevCanvas,
+            backgroundType: 'color',
+            backgroundColor: color || '#ffffff',
+            backgroundImageUrl: null,
+            imageUrl: null, // 기존 이미지 URL도 제거
+            imageWidth: undefined,
+            imageHeight: undefined,
+          } : null);
+          
+          // 4. 추가 안전장치: 딜레이 후 한 번 더 강제 설정
           setTimeout(() => {
+            const canvasElement = document.getElementById('main-canvas');
+            if (canvasElement) {
+              canvasElement.style.backgroundImage = 'none';
+              canvasElement.style.backgroundColor = color || '#ffffff';
+            }
             setCanvas(prev => prev ? {
               ...prev,
               backgroundType: 'color',
-              backgroundImageUrl: null
+              backgroundImageUrl: null,
+              imageUrl: null // 두 번째 정리에서도 imageUrl 제거
             } : null);
-          }, 10);
+            console.log('🔄 Second cleanup completed');
+          }, 100);
         }
       }
 
@@ -1868,10 +1899,14 @@ const CanvasView = () => {
               backgroundColor: canvas.backgroundType === 'color' ? canvas.backgroundColor : '#ffffff',
               backgroundImage: (canvas.backgroundType === 'image' && canvas.backgroundImageUrl) ? 
                 `url(${canvas.backgroundImageUrl})` : 'none',
-              backgroundSize: 'contain',
-              backgroundPosition: 'center',
+              // 배경 제거 시 캐시 방지를 위한 추가 속성들  
+              backgroundAttachment: 'initial',
+              backgroundSize: canvas.backgroundType === 'image' ? 'contain' : 'initial',
+              backgroundPosition: canvas.backgroundType === 'image' ? 'center' : 'initial',
               backgroundRepeat: 'no-repeat',
-            }}
+              // 캐시 무효화를 위한 timestamp 추가
+              '--bg-timestamp': backgroundUpdateKey,
+            } as React.CSSProperties}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}

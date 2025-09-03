@@ -73,8 +73,6 @@ const isVideoUrl = (url: string): boolean => {
 };
 
 const getVideoThumbnail = (url: string): string | null => {
-  console.log('🔍 Getting video thumbnail for URL:', url);
-  
   // YouTube 썸네일 (다양한 패턴 지원)
   const youtubePatterns = [
     /(?:youtube\.com\/watch\?v=)([^&\n?#]+)/,
@@ -88,7 +86,6 @@ const getVideoThumbnail = (url: string): string | null => {
     const match = url.match(pattern);
     if (match) {
       const videoId = match[1];
-      console.log('📺 YouTube video ID found:', videoId);
       return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
     }
   }
@@ -105,7 +102,6 @@ const getVideoThumbnail = (url: string): string | null => {
     const match = url.match(pattern);
     if (match) {
       const videoId = match[1];
-      console.log('📺 Vimeo video ID found:', videoId);
       return `https://vumbnail.com/${videoId}.jpg`;
     }
   }
@@ -121,7 +117,6 @@ const getVideoThumbnail = (url: string): string | null => {
     const match = url.match(pattern);
     if (match) {
       const videoId = match[1];
-      console.log('📺 Dailymotion video ID found:', videoId);
       return `https://www.dailymotion.com/thumbnail/video/${videoId}`;
     }
   }
@@ -130,7 +125,6 @@ const getVideoThumbnail = (url: string): string | null => {
   if (url.includes('clips.twitch.tv')) {
     const clipIdMatch = url.match(/clips\.twitch\.tv\/([^\/\?]+)/);
     if (clipIdMatch) {
-      console.log('📺 Twitch clip found, using generic thumbnail');
       // Twitch는 공식 API가 필요하므로 일단 null 반환
       return null;
     }
@@ -138,11 +132,9 @@ const getVideoThumbnail = (url: string): string | null => {
   
   // 비디오 파일의 경우 (mp4, webm 등)
   if (/\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v)(\?.*)?$/i.test(url)) {
-    console.log('📹 Video file detected, no thumbnail available');
     return null; // 비디오 파일은 썸네일 생성 불가
   }
   
-  console.log('❓ No thumbnail pattern matched for:', url);
   return null;
 };
 
@@ -223,20 +215,20 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
     }))
   ];
 
-  // 디버깅을 위한 로그
-  console.log('🎯 PinHoverCard Debug:', {
-    pinId: pin.id,
-    title: pin.title,
-    description: pin.description,
-    mediaItems: pin.mediaItems,
-    extractedUrls: urls,
-    allMediaItems,
-    urlTypes: urls.map(url => ({
-      url,
-      isImage: isImageUrl(url),
-      isVideo: isVideoUrl(url)
-    }))
-  });
+  // 디버깅을 위한 로그 (필요시 주석 해제)
+  // console.log('🎯 PinHoverCard Debug:', {
+  //   pinId: pin.id,
+  //   title: pin.title,
+  //   description: pin.description,
+  //   mediaItems: pin.mediaItems,
+  //   extractedUrls: urls,
+  //   allMediaItems,
+  //   urlTypes: urls.map(url => ({
+  //     url,
+  //     isImage: isImageUrl(url),
+  //     isVideo: isVideoUrl(url)
+  //   }))
+  // });
 
   // Position the card to avoid screen edges
   const cardStyle: React.CSSProperties = {
@@ -259,17 +251,13 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
   }
 
   const renderMediaPreview = (media: MediaItem) => {
-    console.log('🖼️ Rendering media preview:', media);
-    
     // 타입 재감지: 데이터베이스에 url로 저장되어있어도 실제 내용에 따라 다시 분류
     let actualType = media.type;
     if (media.type === 'url') {
       if (isImageUrl(media.url)) {
         actualType = 'image';
-        console.log('🔄 Reclassified as image:', media.url);
       } else if (isVideoUrl(media.url)) {
         actualType = 'video';
-        console.log('🔄 Reclassified as video:', media.url);
       }
     }
     
@@ -281,9 +269,7 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
               src={media.url} 
               alt={media.name || 'Image'}
               className="w-full h-24 object-cover rounded-md"
-              onLoad={() => console.log('✅ Image loaded successfully:', media.url)}
               onError={(e) => {
-                console.log('❌ Image failed to load:', media.url);
                 e.currentTarget.style.display = 'none';
               }}
             />
@@ -295,7 +281,6 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
       
       case 'video':
         const videoThumbnail = getVideoThumbnail(media.url);
-        console.log('📹 Video thumbnail:', { url: media.url, thumbnail: videoThumbnail });
         
         if (videoThumbnail) {
           return (
@@ -304,13 +289,10 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
                 src={videoThumbnail}
                 alt="Video thumbnail"
                 className="w-full h-24 object-cover rounded-md"
-                onLoad={() => console.log('✅ Video thumbnail loaded:', videoThumbnail)}
                 onError={(e) => {
-                  console.log('❌ Video thumbnail failed:', videoThumbnail);
                   // YouTube 고화질 썸네일 실패시 표준화질로 재시도
                   const currentSrc = e.currentTarget.src;
                   if (currentSrc.includes('hqdefault')) {
-                    console.log('🔄 Retrying with standard quality');
                     e.currentTarget.src = currentSrc.replace('hqdefault', 'mqdefault');
                     return;
                   }
@@ -330,7 +312,6 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
         }
         // 비디오 파일인 경우 첫 번째 프레임 시도
         if (/\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v)(\?.*)?$/i.test(media.url)) {
-          console.log('📹 Trying to show video file with preview');
           return (
             <div key={media.id} className="relative group">
               <video
@@ -338,8 +319,6 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
                 className="w-full h-24 object-cover rounded-md bg-gray-100"
                 preload="metadata"
                 muted
-                onError={() => console.log('❌ Video preview failed:', media.url)}
-                onLoadedMetadata={() => console.log('✅ Video metadata loaded:', media.url)}
               />
               <div className="absolute inset-0 bg-black bg-opacity-20 group-hover:bg-opacity-40 transition-all duration-200 rounded-md flex items-center justify-center">
                 <Video className="w-8 h-8 text-white drop-shadow-lg" />
@@ -351,8 +330,6 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
             </div>
           );
         }
-        
-        console.log('📹 No thumbnail available, showing default video icon');
         return (
           <div key={media.id} className="w-full h-24 bg-gradient-to-br from-red-100 to-purple-100 rounded-md flex items-center justify-center group hover:from-red-200 hover:to-purple-200 transition-all duration-200">
             <div className="text-center">
