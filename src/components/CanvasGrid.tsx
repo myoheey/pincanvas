@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Calendar, Pin, Layers, MoreVertical, Edit, Trash2, Share } from 'lucide-react';
+import { Plus, Calendar, Pin, Layers, MoreVertical, Edit, Trash2, Share, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,9 @@ interface Canvas {
   ownerName?: string;
   pinCount?: number;
   layerCount?: number;
+  background_type?: 'color' | 'image';
+  background_image_url?: string;
+  background_color?: string;
 }
 
 interface CanvasGridProps {
@@ -266,12 +269,28 @@ export const CanvasGrid: React.FC<CanvasGridProps> = ({
             <ContextMenuTrigger>
               <Card className="cursor-pointer hover:shadow-lg transition-shadow group relative">
                 <div className="relative">
-                  <img
-                    src={canvas.image_url || '/placeholder.svg'}
-                    alt={canvas.title}
-                    className="w-full h-32 object-cover rounded-t-lg"
+                  {/* 배경 이미지가 있으면 우선 표시, 없으면 기본 image_url 사용 */}
+                  <div 
+                    className="w-full h-32 rounded-t-lg overflow-hidden cursor-pointer"
+                    style={{
+                      backgroundColor: canvas.background_type === 'color' ? canvas.background_color : '#ffffff',
+                      backgroundImage: canvas.background_type === 'image' && canvas.background_image_url ? 
+                        `url(${canvas.background_image_url})` : 
+                        canvas.image_url && canvas.image_url !== '/placeholder.svg' ? 
+                        `url(${canvas.image_url})` : 'none',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat'
+                    }}
                     onClick={() => handleCanvasClick(canvas.id)}
-                  />
+                  >
+                    {/* 배경이 없는 경우 플레이스홀더 표시 */}
+                    {!canvas.background_image_url && (!canvas.image_url || canvas.image_url === '/placeholder.svg') && (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                        <Image className="w-12 h-12 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
                   {/* 삼점 메뉴 버튼 */}
                   <div className="absolute top-2 right-2">
                     <DropdownMenu>

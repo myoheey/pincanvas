@@ -121,6 +121,9 @@ const CanvasView = () => {
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [drawingTool, setDrawingTool] = useState<'select' | 'draw' | 'erase'>('select');
+  
+  // Background update counter to force re-render when backgrounds are removed
+  const [backgroundUpdateKey, setBackgroundUpdateKey] = useState<number>(0);
   const [brushSize, setBrushSize] = useState(2);
   const [brushColor, setBrushColor] = useState('#000000');
   const [lineStyle, setLineStyle] = useState<'solid' | 'dashed'>('solid');
@@ -145,16 +148,105 @@ const CanvasView = () => {
   // 🔧 DYNAMIC CANVAS APPROACH: 이미지 비율 기반 동적 캔버스 크기
   const REFERENCE_WIDTH = 1200; // 고정 가로 크기
   
+  // 로컬 스토리지에서 이미지 크기 정보 가져오기
+  const getStoredImageDimensions = (canvasId: string) => {
+    try {
+      const stored = localStorage.getItem(`canvas_dimensions_${canvasId}`);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  };
+  
+  // 로컬 스토리지에 이미지 크기 정보 저장
+  const storeImageDimensions = (canvasId: string, width: number, height: number) => {
+    try {
+      localStorage.setItem(`canvas_dimensions_${canvasId}`, JSON.stringify({ width, height }));
+    } catch {
+      console.warn('Failed to store image dimensions to localStorage');
+    }
+  };
+  
+  // 로컬 스토리지에서 이미지 크기 정보 삭제
+  const clearStoredImageDimensions = (canvasId: string) => {
+    try {
+      localStorage.removeItem(`canvas_dimensions_${canvasId}`);
+      console.log('🧹 Cleared stored image dimensions for canvas:', canvasId);
+    } catch {
+      console.warn('Failed to clear stored image dimensions');
+    }
+  };
+  
+  // 캔버스 썸네일을 배경 이미지로 업데이트
+  const updateCanvasThumbnail = async (newThumbnailUrl: string) => {
+    if (!id) return;
+    
+    try {
+      console.log('🖼️ Updating canvas thumbnail:', newThumbnailUrl);
+      
+      const { error } = await supabase
+        .from('canvases')
+        .update({ image_url: newThumbnailUrl })
+        .eq('id', id);
+        
+      if (error) {
+        console.error('❌ Error updating canvas thumbnail:', error);
+        console.error('Thumbnail update error details:', { 
+          code: error.code, 
+          message: error.message, 
+          details: error.details,
+          newThumbnailUrl 
+        });
+        throw error;
+      }
+      
+      console.log('✅ Canvas thumbnail updated successfully');
+      
+      toast({
+        title: "썸네일 업데이트 완료",
+        description: "캔버스 썸네일이 배경 이미지로 변경되었습니다.",
+      });
+    } catch (error) {
+      console.error('❌ Thumbnail update failed:', error);
+    }
+  };
+  
   // 캔버스 크기 계산 (이미지 비율 기반)
   const calculateCanvasDimensions = () => {
-    if (canvas?.imageUrl && canvas.imageUrl !== '/placeholder.svg' && canvas.imageWidth && canvas.imageHeight) {
-      // 이미지가 있는 경우: 이미지 비율 기반으로 계산
-      const aspectRatio = canvas.imageHeight / canvas.imageWidth;
-      const canvasHeight = Math.round(REFERENCE_WIDTH * aspectRatio);
-      return { width: REFERENCE_WIDTH, height: canvasHeight };
+    // 배경 이미지 또는 캔버스 이미지 확인
+    const hasBackgroundImage = canvas?.backgroundType === 'image' && canvas?.backgroundImageUrl;
+    const hasCanvasImage = canvas?.imageUrl && canvas.imageUrl !== '/placeholder.svg';
+    const hasAnyImage = hasBackgroundImage || hasCanvasImage;
+    
+    console.log('🔍 Canvas dimension calculation:', {
+      backgroundType: canvas?.backgroundType,
+      backgroundImageUrl: canvas?.backgroundImageUrl,
+      imageUrl: canvas?.imageUrl,
+      hasBackgroundImage,
+      hasCanvasImage,
+      hasAnyImage,
+      imageWidth: canvas?.imageWidth,
+      imageHeight: canvas?.imageHeight
+    });
+
+    if (hasAnyImage) {
+      // 데이터베이스에서 이미지 크기 정보가 있는 경우
+      if (canvas?.imageWidth && canvas?.imageHeight) {
+        const aspectRatio = canvas.imageHeight / canvas.imageWidth;
+        const canvasHeight = Math.round(REFERENCE_WIDTH * aspectRatio);
+        console.log('✅ Using stored image dimensions:', { width: canvas.imageWidth, height: canvas.imageHeight, aspectRatio, canvasHeight });
+        return { width: REFERENCE_WIDTH, height: canvasHeight };
+      }
+      // 이미지는 있지만 크기 정보가 없는 경우 - 이미지 로드를 기다림
+      else {
+        console.log('⏳ Image exists but no dimensions yet, using 4:3 temporarily (will update when image loads)');
+        // 임시로 4:3 비율 사용 (이미지 로드 후 업데이트됨)
+        return { width: REFERENCE_WIDTH, height: Math.round(REFERENCE_WIDTH * 3 / 4) };
+      }
     } else {
-      // 기본 캔버스 크기 (16:10 비율)
-      return { width: REFERENCE_WIDTH, height: 750 };
+      // 이미지가 없는 경우: 기본 16:9 비율
+      console.log('No image, using 16:9 default');
+      return { width: REFERENCE_WIDTH, height: Math.round(REFERENCE_WIDTH * 9 / 16) };
     }
   };
   
@@ -168,21 +260,26 @@ const CanvasView = () => {
     
     console.log('🖼️ Image loaded:', { naturalWidth, naturalHeight });
     
-    // 캔버스 상태에 이미지 크기 저장
-    if (canvas && (!canvas.imageWidth || !canvas.imageHeight)) {
+    // 캔버스 상태에 이미지 크기 저장 (항상 업데이트)
+    if (canvas) {
       setCanvas(prev => prev ? {
         ...prev,
         imageWidth: naturalWidth,
         imageHeight: naturalHeight
       } : null);
       
-      // 데이터베이스에도 업데이트 (disabled - schema not ready)
-      // updateCanvasImageDimensions(naturalWidth, naturalHeight);
+      // 로컬 스토리지에 저장
+      if (canvas?.id) {
+        storeImageDimensions(canvas.id, naturalWidth, naturalHeight);
+      }
+      
+      // 데이터베이스에 업데이트 시도 (실패해도 상태는 업데이트됨)
+      updateCanvasImageDimensions(naturalWidth, naturalHeight);
     }
   };
 
   const updateCanvasImageDimensions = async (width: number, height: number) => {
-    if (!id || !canEdit) return;
+    if (!id) return;
 
     try {
       const { error } = await supabase
@@ -194,9 +291,15 @@ const CanvasView = () => {
         .eq('id', id);
 
       if (error) {
-        console.error('Error updating canvas image dimensions:', error);
+        // DB 컬럼이 아직 없으면 무시 (상태에는 이미 저장됨)
+        if (error.code === 'PGRST204' || error.message?.includes('image_width') || error.message?.includes('image_height')) {
+          console.log('⚠️ DB schema not updated yet, but canvas dimensions saved to state:', { width, height });
+        } else {
+          console.error('❌ Error updating canvas image dimensions:', error);
+          console.error('Error details:', { code: error.code, message: error.message, details: error.details });
+        }
       } else {
-        console.log('✅ Canvas image dimensions updated:', { width, height });
+        console.log('✅ Canvas image dimensions updated to DB:', { width, height });
       }
     } catch (error) {
       console.error('Error updating canvas image dimensions:', error);
@@ -218,6 +321,14 @@ const CanvasView = () => {
     const absoluteX = relativeX * containerWidth;
     const absoluteY = relativeY * containerHeight;
     
+    // 디버깅: NaN 감지
+    if (isNaN(absoluteX) || isNaN(absoluteY)) {
+      console.error('🚨 NaN detected in convertToAbsoluteCoords:', {
+        relativeX, relativeY, containerWidth, containerHeight,
+        absoluteX, absoluteY
+      });
+    }
+    
     return { x: absoluteX, y: absoluteY };
   };
   
@@ -227,9 +338,8 @@ const CanvasView = () => {
       // Start panning
       setIsDragging(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
-    } else if (!isDrawingMode) {
-      handleCanvasClick(e);
     }
+    // 핀 클릭은 별도로 처리되므로 여기서는 제거
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -528,8 +638,17 @@ const CanvasView = () => {
           backgroundType: (canvasData.background_type as 'color' | 'image') || 'color',
           backgroundColor: canvasData.background_color || '#ffffff',
           backgroundImageUrl: canvasData.background_image_url || undefined,
-          imageWidth: canvasData.image_width || undefined,
-          imageHeight: canvasData.image_height || undefined,
+          imageWidth: canvasData.image_width || (() => {
+            const stored = getStoredImageDimensions(canvasData.id);
+            if (stored) {
+              console.log('💾 Using localStorage image dimensions:', stored);
+            }
+            return stored?.width;
+          })() || undefined,
+          imageHeight: canvasData.image_height || (() => {
+            const stored = getStoredImageDimensions(canvasData.id);
+            return stored?.height;
+          })() || undefined,
         });
 
         // 레이어 데이터 가져오기
@@ -555,6 +674,7 @@ const CanvasView = () => {
         setSelectedLayerId(formattedLayers[0]?.id || '');
 
         // 핀 데이터 가져오기 (템플릿 정보 포함)
+        console.log('🔵 Fetching pins for canvas:', id);
         const { data: pinsData, error: pinsError } = await supabase
           .from('pins')
           .select(`
@@ -564,7 +684,12 @@ const CanvasView = () => {
           `)
           .eq('canvas_id', id);
 
-        if (pinsError) throw pinsError;
+        if (pinsError) {
+          console.error('🔴 Pin fetch error:', pinsError);
+          throw pinsError;
+        }
+
+        console.log('🔵 Raw pins data from database:', pinsData);
 
         const formattedPins: PinData[] = pinsData?.map(pin => {
           // 하드코딩된 템플릿 ID 복원
@@ -608,17 +733,83 @@ const CanvasView = () => {
           };
         }) || [];
 
-        console.log('Formatted pins:', formattedPins.map(pin => ({
+        console.log('🔵 Formatted pins with coordinate check:', formattedPins.map(pin => ({
           id: pin.id,
           x: pin.x,
           y: pin.y,
+          xIsNaN: isNaN(pin.x),
+          yIsNaN: isNaN(pin.y),
           templateId: pin.templateId,
           template: pin.template ? {
             name: pin.template.name,
             shape: pin.template.shape
           } : null
         })));
-        setPins(formattedPins);
+        
+        // 좌표가 유효하지 않은 핀들 필터링 및 경고
+        const validPins = formattedPins.filter(pin => {
+          const isValid = !isNaN(pin.x) && !isNaN(pin.y) && pin.x >= 0 && pin.x <= 1 && pin.y >= 0 && pin.y <= 1;
+          if (!isValid) {
+            console.warn('🚨 Invalid pin coordinates detected:', {
+              id: pin.id,
+              x: pin.x,
+              y: pin.y,
+              templateId: pin.templateId
+            });
+          }
+          return isValid;
+        });
+        
+        console.log(`🔵 Setting ${validPins.length}/${formattedPins.length} valid pins`);
+        setPins(validPins);
+        
+        // 이미지가 있지만 크기 정보가 없으면 미리 로드하여 크기 정보 획득
+        const hasImageUrl = canvasData.image_url && canvasData.image_url !== '/placeholder.svg';
+        const hasBackgroundImageUrl = canvasData.background_image_url;
+        const hasImageDimensions = canvasData.image_width && canvasData.image_height;
+        
+        console.log('🔍 Preload check:', { 
+          hasImageUrl, 
+          hasBackgroundImageUrl, 
+          hasImageDimensions,
+          imageUrl: canvasData.image_url,
+          backgroundImageUrl: canvasData.background_image_url,
+          imageWidth: canvasData.image_width,
+          imageHeight: canvasData.image_height
+        });
+        
+        // 이전 캔버스를 위한 적극적인 이미지 크기 감지
+        if ((hasImageUrl || hasBackgroundImageUrl) && !hasImageDimensions) {
+          console.log('🔄 Preloading image to get dimensions...');
+          const imageUrl = hasBackgroundImageUrl || canvasData.image_url;
+          
+          // 브라우저 환경에서만 실행
+          if (typeof window !== 'undefined' && window.Image) {
+            const img = new window.Image();
+            img.onload = () => {
+              console.log('📏 Preloaded image dimensions:', { width: img.naturalWidth, height: img.naturalHeight });
+              
+              // 상태 업데이트
+              setCanvas(prev => prev ? {
+                ...prev,
+                imageWidth: img.naturalWidth,
+                imageHeight: img.naturalHeight
+              } : null);
+              
+              // 로컬 스토리지에 저장
+              if (canvasData.id) {
+                storeImageDimensions(canvasData.id, img.naturalWidth, img.naturalHeight);
+              }
+              
+              // DB 업데이트 시도
+              updateCanvasImageDimensions(img.naturalWidth, img.naturalHeight);
+            };
+            img.onerror = () => {
+              console.warn('❌ Failed to preload image:', imageUrl);
+            };
+            img.src = imageUrl;
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching canvas data:', error);
@@ -788,7 +979,17 @@ const CanvasView = () => {
   const handlePinUpdate = async (updatedPin: PinData) => {
     try {
       if (isCreatingNewPin) {
-        console.log('Creating new pin with data:', updatedPin);
+        console.log('🔵 Creating new pin with data:', updatedPin);
+        
+        // 좌표 유효성 검증
+        if (isNaN(updatedPin.x) || isNaN(updatedPin.y)) {
+          console.error('🚨 Invalid coordinates detected in pin update:', {
+            x: updatedPin.x, y: updatedPin.y,
+            xIsNaN: isNaN(updatedPin.x),
+            yIsNaN: isNaN(updatedPin.y)
+          });
+          throw new Error('Invalid pin coordinates');
+        }
         
         // 새 핀을 데이터베이스에 추가
         // 하드코딩된 커스텀 템플릿 ID들은 별도 필드에 저장
@@ -810,7 +1011,10 @@ const CanvasView = () => {
           })
         };
         
-        console.log('Insert data:', insertData);
+        console.log('🔵 Insert data with coordinate validation:', {
+          ...insertData,
+          coordinatesValid: !isNaN(insertData.x) && !isNaN(insertData.y)
+        });
         
         const { data, error } = await supabase
           .from('pins')
@@ -818,7 +1022,40 @@ const CanvasView = () => {
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('🔴 Pin insert error:', error);
+          throw error;
+        }
+
+        console.log('✅ Pin inserted successfully:', data);
+
+        // 미디어 아이템들 저장
+        if (updatedPin.mediaItems && updatedPin.mediaItems.length > 0) {
+          console.log('🔵 Saving media items:', updatedPin.mediaItems);
+          
+          const mediaItemsData = updatedPin.mediaItems.map(item => ({
+            pin_id: data.id,
+            type: item.type,
+            url: item.url,
+            name: item.name || null
+          }));
+          
+          const { error: mediaError } = await supabase
+            .from('media_items')
+            .insert(mediaItemsData);
+            
+          if (mediaError) {
+            console.error('🔴 Media items insert error:', mediaError);
+            // 미디어 아이템 저장 실패해도 핀은 생성된 상태로 유지
+            toast({
+              title: "경고",
+              description: "핀은 생성되었으나 미디어 아이템 저장에 실패했습니다.",
+              variant: "destructive",
+            });
+          } else {
+            console.log('✅ Media items saved successfully');
+          }
+        }
 
         const newPin: PinData = {
           ...updatedPin,
@@ -859,6 +1096,43 @@ const CanvasView = () => {
 
         if (error) throw error;
 
+        // 기존 미디어 아이템들 삭제 후 새로 추가
+        const { error: deleteError } = await supabase
+          .from('media_items')
+          .delete()
+          .eq('pin_id', updatedPin.id);
+          
+        if (deleteError) {
+          console.error('🔴 Error deleting old media items:', deleteError);
+        }
+
+        // 새 미디어 아이템들 저장
+        if (updatedPin.mediaItems && updatedPin.mediaItems.length > 0) {
+          console.log('🔵 Updating media items:', updatedPin.mediaItems);
+          
+          const mediaItemsData = updatedPin.mediaItems.map(item => ({
+            pin_id: updatedPin.id,
+            type: item.type,
+            url: item.url,
+            name: item.name || null
+          }));
+          
+          const { error: mediaError } = await supabase
+            .from('media_items')
+            .insert(mediaItemsData);
+            
+          if (mediaError) {
+            console.error('🔴 Media items update error:', mediaError);
+            toast({
+              title: "경고",
+              description: "핀은 수정되었으나 미디어 아이템 저장에 실패했습니다.",
+              variant: "destructive",
+            });
+          } else {
+            console.log('✅ Media items updated successfully');
+          }
+        }
+
         const updatedPins = pins.map(pin => pin.id === updatedPin.id ? updatedPin : pin);
         setPins(updatedPins);
 
@@ -879,6 +1153,18 @@ const CanvasView = () => {
 
   const handlePinDelete = async (pinId: string) => {
     try {
+      // 먼저 연관된 미디어 아이템들 삭제
+      const { error: mediaError } = await supabase
+        .from('media_items')
+        .delete()
+        .eq('pin_id', pinId);
+        
+      if (mediaError) {
+        console.error('🔴 Error deleting media items:', mediaError);
+        // 미디어 아이템 삭제 실패해도 핀 삭제는 계속 진행
+      }
+
+      // 핀 삭제
       const { error } = await supabase
         .from('pins')
         .delete()
@@ -1191,12 +1477,45 @@ const CanvasView = () => {
       if (error) throw error;
 
       if (canvas) {
+        // 배경이 단색으로 변경되거나 다른 이미지로 변경되는 경우 이전 이미지 크기 정보 정리
+        if (type === 'color' || (type === 'image' && imageUrl !== canvas.backgroundImageUrl)) {
+          console.log('🔄 Background changed, clearing stored dimensions');
+          clearStoredImageDimensions(canvas.id);
+        }
+        
+        // 배경이 이미지로 변경되면 썸네일도 업데이트
+        if (type === 'image' && imageUrl) {
+          updateCanvasThumbnail(imageUrl);
+        }
+        
+        // 배경 제거 시 명시적으로 null로 설정하여 DOM 재렌더링 강제
+        const newBackgroundImageUrl = type === 'image' ? imageUrl : null;
+        
         setCanvas({
           ...canvas,
           backgroundType: type,
           backgroundColor: color || canvas.backgroundColor,
-          backgroundImageUrl: type === 'image' ? imageUrl : undefined,
+          backgroundImageUrl: newBackgroundImageUrl,
+          // 배경이 변경되면 이미지 크기 정보도 리셋
+          imageWidth: type === 'color' ? undefined : canvas.imageWidth,
+          imageHeight: type === 'color' ? undefined : canvas.imageHeight,
+          // 배경이 이미지로 변경되면 썸네일도 업데이트 (로컬 상태)
+          imageUrl: type === 'image' ? imageUrl : canvas.imageUrl,
         });
+
+        // 배경 제거 시 강제로 캔버스 재렌더링을 위해 key 변경을 위한 추가 상태 업데이트
+        if (type === 'color') {
+          console.log('🎨 Background removed, forcing canvas re-render');
+          setBackgroundUpdateKey(prev => prev + 1);
+          // 작은 딜레이 후 상태를 다시 설정하여 재렌더링 보장
+          setTimeout(() => {
+            setCanvas(prev => prev ? {
+              ...prev,
+              backgroundType: 'color',
+              backgroundImageUrl: null
+            } : null);
+          }, 10);
+        }
       }
 
       toast({
@@ -1541,12 +1860,13 @@ const CanvasView = () => {
           <div
             ref={canvasContainerRef}
             id="main-canvas"
+            key={`canvas-${canvas.backgroundType}-${canvas.backgroundColor}-${canvas.backgroundImageUrl || 'none'}-${backgroundUpdateKey}`}
             className={`relative bg-white rounded-lg shadow-lg overflow-hidden mx-auto ${isPresentationMode ? 'cursor-default' : 'cursor-crosshair'}`}
             style={{ 
               width: isPresentationMode ? '100vw' : `${canvasDimensions.width}px`,
               height: isPresentationMode ? '100vh' : `${canvasDimensions.height}px`,
               backgroundColor: canvas.backgroundType === 'color' ? canvas.backgroundColor : '#ffffff',
-              backgroundImage: canvas.backgroundType === 'image' && canvas.backgroundImageUrl ? 
+              backgroundImage: (canvas.backgroundType === 'image' && canvas.backgroundImageUrl) ? 
                 `url(${canvas.backgroundImageUrl})` : 'none',
               backgroundSize: 'contain',
               backgroundPosition: 'center',
@@ -1555,6 +1875,7 @@ const CanvasView = () => {
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
+            onClick={handleCanvasClick}
           >
             <div
               className="w-full h-full relative"
@@ -1577,7 +1898,26 @@ const CanvasView = () => {
                 }}
                 onLoad={handleImageLoad}
               />
-            ) : (
+            ) : null}
+
+            {/* Hidden image to detect background image dimensions */}
+            {canvas.backgroundType === 'image' && canvas.backgroundImageUrl && (
+              <img
+                key={`bg-${canvas.backgroundImageUrl}`} // Force re-mount on URL change
+                src={canvas.backgroundImageUrl}
+                alt="Background dimension detector"
+                onLoad={handleImageLoad}
+                style={{
+                  position: 'absolute',
+                  visibility: 'hidden',
+                  pointerEvents: 'none',
+                  width: '1px',
+                  height: '1px',
+                }}
+              />
+            )}
+
+            {(
               canvas.backgroundType === 'color' && canvas.backgroundColor === '#ffffff' && (
                 <div 
                   className="w-full h-full flex items-center justify-center text-gray-300"
@@ -1639,8 +1979,8 @@ const CanvasView = () => {
                   left: 0,
                   width: '100%',
                   height: '100%',
-                  pointerEvents: selectedLayerId === layer.id ? 'auto' : 'none',
-                  zIndex: selectedLayerId === layer.id ? 100 : 1
+                  pointerEvents: selectedLayerId === layer.id && isDrawingMode ? 'auto' : 'none',
+                  zIndex: selectedLayerId === layer.id && isDrawingMode ? 50 : 1
                 }}
               >
                 <DrawingCanvas

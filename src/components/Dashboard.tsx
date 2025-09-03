@@ -21,6 +21,9 @@ interface Canvas {
   ownerName?: string;
   pinCount?: number;
   layerCount?: number;
+  background_type?: 'color' | 'image';
+  background_image_url?: string;
+  background_color?: string;
 }
 
 export const Dashboard: React.FC = () => {
@@ -55,7 +58,7 @@ export const Dashboard: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('canvases')
-        .select('*')
+        .select('*, background_type, background_image_url, background_color')
         .eq('owner_id', user?.id)
         .order('created_at', { ascending: false });
 
@@ -83,7 +86,10 @@ export const Dashboard: React.FC = () => {
             title,
             image_url,
             created_at,
-            owner_id
+            owner_id,
+            background_type,
+            background_image_url,
+            background_color
           )
         `)
         .eq('shared_with_email', user?.email);
@@ -111,6 +117,9 @@ export const Dashboard: React.FC = () => {
           ownerName: profileData?.full_name || '알 수 없는 사용자',
           pinCount: 0,
           layerCount: 0,
+          background_type: canvas.background_type,
+          background_image_url: canvas.background_image_url,
+          background_color: canvas.background_color,
         });
       }
 

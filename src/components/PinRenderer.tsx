@@ -6,6 +6,7 @@ import {
   Star, 
   Heart,
 } from 'lucide-react';
+import { PinHoverCard } from './PinHoverCard';
 
 interface PinTemplate {
   id: string;
@@ -21,6 +22,13 @@ interface PinTemplate {
   isPublic: boolean;
 }
 
+interface MediaItem {
+  id: string;
+  type: 'image' | 'video' | 'url';
+  url: string;
+  name?: string;
+}
+
 interface PinData {
   id: string;
   x: number;
@@ -31,6 +39,7 @@ interface PinData {
   canvasId: string;
   templateId?: string;
   template?: PinTemplate;
+  mediaItems?: MediaItem[];
 }
 
 interface PinRendererProps {
@@ -120,16 +129,29 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
     displayTemplate = getHardcodedTemplate(pin.templateId);
   }
   const [isDragging, setIsDragging] = useState(false);
-  const [currentPosition, setCurrentPosition] = useState({ x: pin.x, y: pin.y });
+  const [currentPosition, setCurrentPosition] = useState({ 
+    x: isNaN(pin.x) ? 0 : pin.x, 
+    y: isNaN(pin.y) ? 0 : pin.y 
+  });
+  const [isHovered, setIsHovered] = useState(false);
+  const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
   const pinRef = useRef<HTMLDivElement>(null);
   const finalPositionRef = useRef({ x: pin.x, y: pin.y });
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update position when pin position changes (only if not dragging and position actually changed)
   useEffect(() => {
     if (!isDragging) {
-      const hasChanged = currentPosition.x !== pin.x || currentPosition.y !== pin.y;
+      const safeX = isNaN(pin.x) ? 0 : pin.x;
+      const safeY = isNaN(pin.y) ? 0 : pin.y;
+      const hasChanged = currentPosition.x !== safeX || currentPosition.y !== safeY;
       if (hasChanged) {
-        setCurrentPosition({ x: pin.x, y: pin.y });
+        console.log(`🐛 Pin ${pin.id} position update:`, { 
+          originalX: pin.x, originalY: pin.y, 
+          safeX, safeY, 
+          templateId: pin.templateId 
+        });
+        setCurrentPosition({ x: safeX, y: safeY });
       }
     }
   }, [pin.x, pin.y, isDragging, currentPosition.x, currentPosition.y]);
@@ -216,10 +238,49 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
   };
 
   const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // 이벤트 전파 방지
+    e.preventDefault(); // 기본 동작 방지
+    
     if (!isDragging) {
       onClick();
     }
   };
+
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    
+    // 즉시 rect를 저장해서 timeout에서 null이 되는 것을 방지
+    const currentTarget = e.currentTarget as HTMLElement;
+    const rect = currentTarget.getBoundingClientRect();
+    const position = {
+      x: rect.left + rect.width / 2,
+      y: rect.top
+    };
+    
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoverPosition(position);
+      setIsHovered(true);
+    }, 500); // 다시 500ms로 복원
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsHovered(false);
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Custom image template
   if (finalTemplate.shape === 'custom' && finalTemplate.imageUrl) {
@@ -231,31 +292,32 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
           canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
         }`}
         style={{
-          left: Math.round(currentPosition.x) - size / 2,
-          top: Math.round(currentPosition.y) - size / 2,
-          zIndex: isDragging ? 30 : 20,
+          left: Math.round(isNaN(currentPosition.x) ? 0 : currentPosition.x) - size / 2,
+          top: Math.round(isNaN(currentPosition.y) ? 0 : currentPosition.y) - size / 2,
+          zIndex: isDragging ? 200 : 100,
         }}
         onMouseDown={handleMouseDown}
         onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
-        <div className="relative group">
-          <img
-            src={finalTemplate.imageUrl}
-            alt={pin.title}
-            className="object-cover rounded-full border-2 border-white shadow-lg"
-            style={{ 
-              width: size,
-              height: size,
-              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
-            }}
-          />
-          
-          {/* Hover tooltip */}
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-            {pin.title}
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-black"></div>
-          </div>
-        </div>
+        <img
+          src={finalTemplate.imageUrl}
+          alt={pin.title}
+          className="object-cover rounded-full border-2 border-white shadow-lg"
+          style={{ 
+            width: size,
+            height: size,
+            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+          }}
+        />
+        
+        {/* Advanced Hover Card */}
+        <PinHoverCard
+          pin={pin}
+          isVisible={isHovered && !isDragging}
+          position={hoverPosition}
+        />
       </div>
     );
   }
@@ -271,31 +333,32 @@ export const PinRenderer: React.FC<PinRendererProps> = ({
         canEdit ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
       }`}
       style={{
-        left: Math.round(currentPosition.x) - size / 2,
-        top: Math.round(currentPosition.y) - size / 2,
-        zIndex: isDragging ? 30 : 20,
+        left: Math.round(isNaN(currentPosition.x) ? 0 : currentPosition.x) - size / 2,
+        top: Math.round(isNaN(currentPosition.y) ? 0 : currentPosition.y) - size / 2,
+        zIndex: isDragging ? 200 : 100,
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
-      <div className="relative group">
-        <ShapeComponent
-          size={size}
-          style={{ 
-            color: finalColor,
-            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
-          }}
-          fill={finalTemplate.shape === 'circle' ? finalColor : 'none'}
-          stroke={finalColor}
-          strokeWidth={finalTemplate.shape === 'circle' ? 0 : 2}
-        />
-        
-        {/* Hover tooltip */}
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-          {pin.title}
-          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-black"></div>
-        </div>
-      </div>
+      <ShapeComponent
+        size={size}
+        style={{ 
+          color: finalColor,
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+        }}
+        fill={finalTemplate.shape === 'circle' ? finalColor : 'none'}
+        stroke={finalColor}
+        strokeWidth={finalTemplate.shape === 'circle' ? 0 : 2}
+      />
+      
+      {/* Advanced Hover Card */}
+      <PinHoverCard
+        pin={pin}
+        isVisible={isHovered && !isDragging}
+        position={hoverPosition}
+      />
     </div>
   );
 };

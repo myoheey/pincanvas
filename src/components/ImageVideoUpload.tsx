@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
-import { Upload, Link, X, Image, Video, File } from 'lucide-react';
+import { Upload, Link, X, Image, Video, File, Loader } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface MediaItem {
   id: string;
@@ -23,28 +25,98 @@ export const ImageVideoUpload: React.FC<ImageVideoUploadProps> = ({
 }) => {
   const [urlInput, setUrlInput] = useState('');
   const [isAddingUrl, setIsAddingUrl] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        const newMediaItem: MediaItem = {
-          id: `${Date.now()}-${Math.random()}`,
-          type: file.type.startsWith('video/') ? 'video' : 'image',
-          url: result,
-          name: file.name,
-        };
-        onMediaChange([...mediaItems, newMediaItem]);
-      };
-      reader.readAsDataURL(file);
-    });
+    setIsUploading(true);
 
-    // Reset input
-    event.target.value = '';
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        // 파일 크기 체크 (영상 100MB, 이미지 10MB 제한)
+        const maxSize = file.type.startsWith('video/') ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+          toast.error(`파일 크기가 너무 큽니다: ${file.name} (최대 ${file.type.startsWith('video/') ? '100MB' : '10MB'})`);
+          return null;
+        }
+
+        const isVideo = file.type.startsWith('video/');
+        const isImage = file.type.startsWith('image/');
+
+        // 영상이나 큰 이미지 파일은 Supabase Storage에 업로드
+        if (isVideo || (isImage && file.size > 1024 * 1024)) { // 1MB 이상
+          try {
+            const fileExt = file.name.split('.').pop() || '';
+            const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+            const filePath = `media/${fileName}`;
+
+            console.log(`Uploading ${isVideo ? 'video' : 'large image'} to storage:`, fileName);
+
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('canvas-backgrounds')
+              .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+              });
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage
+              .from('canvas-backgrounds')
+              .getPublicUrl(filePath);
+
+            return {
+              id: `${Date.now()}-${Math.random()}`,
+              type: isVideo ? 'video' as const : 'image' as const,
+              url: data.publicUrl,
+              name: file.name,
+            };
+          } catch (error: any) {
+            console.error('Storage upload error:', error);
+            
+            // RLS 정책 에러인지 확인
+            if (error?.message?.includes('row-level security') || error?.message?.includes('Policy')) {
+              toast.error(`업로드 권한이 없습니다. RLS 정책을 확인해주세요: ${file.name}`);
+            } else {
+              toast.error(`파일 업로드 실패: ${file.name} - ${error?.message || '알 수 없는 오류'}`);
+            }
+            return null;
+          }
+        } else {
+          // 작은 이미지는 Base64로 처리
+          return new Promise<MediaItem>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const result = e.target?.result as string;
+              resolve({
+                id: `${Date.now()}-${Math.random()}`,
+                type: 'image',
+                url: result,
+                name: file.name,
+              });
+            };
+            reader.readAsDataURL(file);
+          });
+        }
+      });
+
+      const results = await Promise.all(uploadPromises);
+      const validResults = results.filter(result => result !== null) as MediaItem[];
+      
+      if (validResults.length > 0) {
+        onMediaChange([...mediaItems, ...validResults]);
+        toast.success(`${validResults.length}개 파일이 업로드되었습니다.`);
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      toast.error('파일 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploading(false);
+      // Reset input
+      event.target.value = '';
+    }
   };
 
   const handleUrlAdd = () => {
@@ -62,7 +134,32 @@ export const ImageVideoUpload: React.FC<ImageVideoUploadProps> = ({
     setIsAddingUrl(false);
   };
 
-  const handleRemoveMedia = (id: string) => {
+  const handleRemoveMedia = async (id: string) => {
+    const itemToRemove = mediaItems.find(item => item.id === id);
+    
+    // Storage에서 업로드된 파일인지 확인하고 삭제
+    if (itemToRemove && itemToRemove.url.includes('supabase.co/storage/')) {
+      try {
+        // URL에서 파일 경로 추출
+        const url = new URL(itemToRemove.url);
+        const pathParts = url.pathname.split('/');
+        // /storage/v1/object/public/canvas-backgrounds/media/filename 형식에서 media/filename 추출
+        const filePath = pathParts.slice(pathParts.indexOf('media')).join('/');
+        
+        console.log('Deleting file from storage:', filePath);
+        
+        const { error } = await supabase.storage
+          .from('canvas-backgrounds')
+          .remove([filePath]);
+          
+        if (error) {
+          console.error('Storage delete error:', error);
+        }
+      } catch (error) {
+        console.error('Error parsing storage URL:', error);
+      }
+    }
+    
     onMediaChange(mediaItems.filter(item => item.id !== id));
   };
 
@@ -134,9 +231,14 @@ export const ImageVideoUpload: React.FC<ImageVideoUploadProps> = ({
           variant="outline"
           size="sm"
           onClick={() => document.getElementById('media-upload')?.click()}
+          disabled={isUploading}
         >
-          <Upload className="w-4 h-4 mr-2" />
-          파일 업로드
+          {isUploading ? (
+            <Loader className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4 mr-2" />
+          )}
+          {isUploading ? '업로드 중...' : '파일 업로드'}
         </Button>
         
         <Button
