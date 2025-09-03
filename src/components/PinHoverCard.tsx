@@ -341,32 +341,80 @@ export const PinHoverCard: React.FC<PinHoverCardProps> = ({
       
       case 'url':
         const websitePreview = getWebsitePreview(media.url);
+        // 간단하고 확실한 방법들
+        const screenshotUrls = [
+          // 1. 사이트 파비콘을 큰 사이즈로 (Google 서비스)
+          `https://www.google.com/s2/favicons?domain=${new URL(media.url).hostname}&sz=128`,
+          // 2. Placeholder with site name
+          `https://via.placeholder.com/320x180/3b82f6/ffffff?text=${encodeURIComponent(new URL(media.url).hostname)}`,
+          // 3. 기본 fallback
+          `https://via.placeholder.com/320x180/6366f1/ffffff?text=Website`
+        ];
+        
+        const screenshotUrl = screenshotUrls[0]; // Google 파비콘부터 시도
+        
         return (
-          <div key={media.id} className="w-full p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-md border border-blue-100 group hover:from-blue-100 hover:to-indigo-100 transition-all duration-200">
-            <div className="flex items-start space-x-3">
-              {websitePreview && (
-                <img 
-                  src={websitePreview.favicon} 
-                  alt={`${websitePreview.siteName} favicon`}
-                  className="w-5 h-5 flex-shrink-0 rounded mt-0.5"
-                  onError={(e) => {
-                    // 파비콘 로드 실패시 기본 아이콘으로 대체
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              )}
-              <ExternalLink className={`w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5 ${websitePreview ? 'hidden' : 'block'}`} />
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-blue-700 truncate">
-                  {websitePreview?.siteName || new URL(media.url).hostname.replace('www.', '')}
-                </div>
-                {websitePreview?.description && (
-                  <div className="text-xs text-blue-500 truncate mb-1 opacity-80">
-                    {websitePreview.description}
-                  </div>
+          <div key={media.id} className="w-full bg-gradient-to-r from-blue-50 to-indigo-50 rounded-md border border-blue-100 overflow-hidden group hover:from-blue-100 hover:to-indigo-100 transition-all duration-200">
+            {/* 웹사이트 스크린샷 */}
+            <div className="relative">
+              <img
+                src={screenshotUrl}
+                alt="Website screenshot"
+                className="w-full h-24 object-cover"
+                onError={(e) => {
+                  // 다음 서비스로 fallback 시도
+                  const currentSrc = e.currentTarget.src;
+                  const currentIndex = screenshotUrls.findIndex(url => url === currentSrc);
+                  
+                  if (currentIndex < screenshotUrls.length - 1) {
+                    // 다음 서비스 시도
+                    console.log(`Screenshot service ${currentIndex + 1} failed, trying service ${currentIndex + 2}`);
+                    e.currentTarget.src = screenshotUrls[currentIndex + 1];
+                    return;
+                  }
+                  
+                  // 모든 서비스 실패시 기본 레이아웃으로 fallback
+                  console.log('All screenshot services failed, showing fallback UI');
+                  e.currentTarget.style.display = 'none';
+                  const fallbackDiv = e.currentTarget.nextElementSibling as HTMLElement;
+                  if (fallbackDiv) fallbackDiv.style.display = 'flex';
+                }}
+              />
+              {/* 스크린샷 실패시 fallback UI */}
+              <div className="hidden w-full h-24 bg-gradient-to-br from-blue-100 to-indigo-100 items-center justify-center">
+                <ExternalLink className="w-8 h-8 text-blue-400" />
+              </div>
+              {/* 오버레이 */}
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200 flex items-center justify-center">
+                <ExternalLink className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+              </div>
+            </div>
+            
+            {/* 사이트 정보 */}
+            <div className="p-3">
+              <div className="flex items-start space-x-2">
+                {websitePreview && (
+                  <img 
+                    src={websitePreview.favicon} 
+                    alt={`${websitePreview.siteName} favicon`}
+                    className="w-4 h-4 flex-shrink-0 rounded mt-0.5"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
                 )}
-                <div className="text-xs text-blue-600 truncate opacity-60">
-                  {media.url.length > 35 ? media.url.substring(0, 35) + '...' : media.url}
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-blue-700 truncate">
+                    {websitePreview?.siteName || new URL(media.url).hostname.replace('www.', '')}
+                  </div>
+                  {websitePreview?.description && (
+                    <div className="text-xs text-blue-500 truncate mb-1 opacity-80">
+                      {websitePreview.description}
+                    </div>
+                  )}
+                  <div className="text-xs text-blue-600 truncate opacity-60">
+                    {media.url.length > 30 ? media.url.substring(0, 30) + '...' : media.url}
+                  </div>
                 </div>
               </div>
             </div>
