@@ -1731,9 +1731,11 @@ const CanvasView = () => {
                     </span>
                   </Button>
                 )}
-                <CanvasExporter 
+                <CanvasExporter
                   canvasElementId="main-canvas"
                   canvasTitle={canvas.title}
+                  pins={getVisiblePins()}
+                  layers={layers}
                 />
                 {isOwner && canvas && (
                   <>
