@@ -334,6 +334,13 @@ const CanvasView = () => {
   
   // Handle mouse and touch events for pan
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Only handle pan events on the main canvas, not on drawing canvas elements
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'CANVAS' && isDrawingMode) {
+      // Don't interfere with drawing canvas when in drawing mode
+      return;
+    }
+
     // For mouse: pan with Ctrl/Cmd key
     // For touch: pan with single finger when not in drawing mode
     if ((e.pointerType === 'mouse' && (e.ctrlKey || e.metaKey)) ||
@@ -957,6 +964,13 @@ const CanvasView = () => {
   }
 
   const handleCanvasClick = async (e: React.MouseEvent<HTMLDivElement>) => {
+    // Check if the click is on a drawing canvas
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'CANVAS' && isDrawingMode) {
+      // Don't add pins when clicking on drawing canvas in drawing mode
+      return;
+    }
+
     if (isDrawingMode) return; // Don't add pins in drawing mode
     if (!canEdit) return; // Don't add pins if user can't edit
     

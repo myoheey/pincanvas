@@ -220,10 +220,32 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       width: Math.max(window.innerWidth * 2, 3000),
       height: Math.max(window.innerHeight * 2, 2000),
       backgroundColor: 'transparent',
+      // Enable touch support for drawing
+      enableRetinaScaling: false,
+      allowTouchScrolling: false, // Disable to allow touch drawing
     });
 
-    // Enable zoom and pan functionality
-    canvas.allowTouchScrolling = true;
+    // Enable touch drawing support
+    canvas.allowTouchScrolling = false; // Must be false for touch drawing to work
+    canvas.isDrawingMode = false; // Will be set later based on tool
+
+    // Enable pointer events for touch support
+    if (canvas.upperCanvasEl) {
+      canvas.upperCanvasEl.style.touchAction = 'none';
+      canvas.upperCanvasEl.style.msTouchAction = 'none';
+      canvas.upperCanvasEl.style.webkitTouchAction = 'none';
+    }
+    if (canvas.lowerCanvasEl) {
+      canvas.lowerCanvasEl.style.touchAction = 'none';
+      canvas.lowerCanvasEl.style.msTouchAction = 'none';
+      canvas.lowerCanvasEl.style.webkitTouchAction = 'none';
+    }
+
+    // Force enable touch events on canvas
+    if (typeof window !== 'undefined' && 'ontouchstart' in window) {
+      console.log('Touch device detected, enabling touch drawing');
+      // Additional touch event setup if needed
+    }
     
     // Configure drawing brush - Fabric.js v6 방식
     if (!canvas.freeDrawingBrush) {
@@ -783,7 +805,10 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       <canvas
         ref={canvasRef}
         className="absolute inset-0 pointer-events-auto"
-        style={{ zIndex: 10 }}
+        style={{
+          zIndex: 10,
+          touchAction: 'none' // Prevent default touch behaviors
+        }}
       />
     </div>
   );
