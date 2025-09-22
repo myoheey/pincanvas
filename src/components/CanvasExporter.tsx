@@ -165,24 +165,99 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
                   <div style="
                     color: #6b7280;
                     font-size: 14px;
-                    margin-bottom: 8px;
+                    margin-bottom: 12px;
                     line-height: 1.5;
                   ">${pin.description}</div>
                 ` : ''}
 
-                ${pin.template ? `
-                  <div style="
-                    font-size: 12px;
-                    color: #9ca3af;
-                    margin-bottom: 4px;
-                  ">템플릿: ${pin.template.name}</div>
-                ` : ''}
-
                 ${pin.mediaItems && pin.mediaItems.length > 0 ? `
                   <div style="
-                    font-size: 12px;
-                    color: #9ca3af;
-                  ">첨부 파일: ${pin.mediaItems.length}개</div>
+                    margin-top: 10px;
+                  ">
+                    <div style="
+                      font-size: 12px;
+                      color: #9ca3af;
+                      margin-bottom: 8px;
+                    ">첨부 파일 (${pin.mediaItems.length}개):</div>
+                    <div style="
+                      display: flex;
+                      flex-wrap: wrap;
+                      gap: 8px;
+                    ">
+                      ${pin.mediaItems.map(media => {
+                        if (media.type === 'image') {
+                          return `
+                            <div style="
+                              position: relative;
+                              width: 60px;
+                              height: 60px;
+                              border: 1px solid #d1d5db;
+                              border-radius: 4px;
+                              overflow: hidden;
+                              background-color: #f3f4f6;
+                            ">
+                              <img src="${media.url}"
+                                   alt="${media.name || 'Image'}"
+                                   style="
+                                     width: 100%;
+                                     height: 100%;
+                                     object-fit: cover;
+                                   "
+                                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                              <div style="
+                                display: none;
+                                width: 100%;
+                                height: 100%;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 10px;
+                                color: #9ca3af;
+                                text-align: center;
+                                background-color: #f3f4f6;
+                              ">이미지</div>
+                            </div>
+                          `;
+                        } else if (media.type === 'video') {
+                          return `
+                            <div style="
+                              width: 60px;
+                              height: 60px;
+                              border: 1px solid #d1d5db;
+                              border-radius: 4px;
+                              background-color: #1f2937;
+                              display: flex;
+                              align-items: center;
+                              justify-content: center;
+                              color: white;
+                              font-size: 10px;
+                              text-align: center;
+                            ">
+                              ▶<br/>동영상
+                            </div>
+                          `;
+                        } else if (media.type === 'url') {
+                          return `
+                            <div style="
+                              width: 60px;
+                              height: 60px;
+                              border: 1px solid #d1d5db;
+                              border-radius: 4px;
+                              background-color: #3b82f6;
+                              display: flex;
+                              align-items: center;
+                              justify-content: center;
+                              color: white;
+                              font-size: 10px;
+                              text-align: center;
+                            ">
+                              🔗<br/>링크
+                            </div>
+                          `;
+                        }
+                        return '';
+                      }).join('')}
+                    </div>
+                  </div>
                 ` : ''}
               </div>
             `).join('')}
