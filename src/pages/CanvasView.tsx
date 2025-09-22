@@ -332,18 +332,19 @@ const CanvasView = () => {
     return { x: absoluteX, y: absoluteY };
   };
   
-  // Handle mouse events for zoom/pan
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.ctrlKey || e.metaKey) {
-      // Start panning
+  // Handle mouse and touch events for pan
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // For mouse: pan with Ctrl/Cmd key
+    // For touch: pan with single finger when not in drawing mode
+    if ((e.pointerType === 'mouse' && (e.ctrlKey || e.metaKey)) ||
+        (e.pointerType === 'touch' && !isDrawingMode)) {
       setIsDragging(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
     }
-    // 핀 클릭은 별도로 처리되므로 여기서는 제거
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isDragging && (e.ctrlKey || e.metaKey)) {
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragging) {
       const deltaX = e.clientX - lastPanPoint.x;
       const deltaY = e.clientY - lastPanPoint.y;
       setPanX(prev => prev + deltaX);
@@ -352,7 +353,7 @@ const CanvasView = () => {
     }
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
     setIsDragging(false);
   };
 
@@ -542,12 +543,70 @@ const CanvasView = () => {
       }
     };
 
+    // Touch events for pinch-to-zoom
+    let lastTouchDistance = 0;
+    let isZooming = false;
+    let touchStartTime = 0;
+
+    const getTouchDistance = (touches: TouchList) => {
+      if (touches.length < 2) return 0;
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        lastTouchDistance = getTouchDistance(e.touches);
+        isZooming = true;
+        touchStartTime = Date.now();
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && isZooming) {
+        e.preventDefault();
+        const currentDistance = getTouchDistance(e.touches);
+
+        if (lastTouchDistance > 0 && currentDistance > 0) {
+          const rawZoomFactor = currentDistance / lastTouchDistance;
+
+          // Apply smoothing to prevent jittery zoom
+          const smoothingFactor = 0.3; // Adjust between 0.1 (very smooth) and 1.0 (no smoothing)
+          const zoomFactor = 1 + (rawZoomFactor - 1) * smoothingFactor;
+
+          // Only apply zoom if the change is significant enough
+          if (Math.abs(zoomFactor - 1) > 0.01) {
+            setZoom(prev => Math.max(0.1, Math.min(3, prev * zoomFactor)));
+          }
+        }
+
+        lastTouchDistance = currentDistance;
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        isZooming = false;
+        lastTouchDistance = 0;
+        touchStartTime = 0;
+      }
+    };
+
     // Add non-passive wheel listener for zoom control
     const container = canvasContainerRef.current;
     if (container) {
       container.addEventListener('wheel', handleWheelZoom, { passive: false });
+      container.addEventListener('touchstart', handleTouchStart, { passive: false });
+      container.addEventListener('touchmove', handleTouchMove, { passive: false });
+      container.addEventListener('touchend', handleTouchEnd, { passive: false });
+
       return () => {
         container.removeEventListener('wheel', handleWheelZoom);
+        container.removeEventListener('touchstart', handleTouchStart);
+        container.removeEventListener('touchmove', handleTouchMove);
+        container.removeEventListener('touchend', handleTouchEnd);
       };
     }
   }, [canvasContainerRef]);
@@ -1907,9 +1966,9 @@ const CanvasView = () => {
               // 캐시 무효화를 위한 timestamp 추가
               '--bg-timestamp': backgroundUpdateKey,
             } as React.CSSProperties}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
             onClick={handleCanvasClick}
           >
             <div
