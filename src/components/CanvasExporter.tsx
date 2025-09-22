@@ -61,8 +61,92 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
   canvasTitle,
   pins,
   layers,
-}) => {
+) => {
   const { toast } = useToast();
+
+  // Helper functions for thumbnail generation
+  const getVideoThumbnail = (url: string): string | null => {
+    // YouTube 썸네일
+    const youtubePatterns = [
+      /(?:youtube\.com\/watch\?v=)([^&\n?#]+)/,
+      /(?:youtu\.be\/)([^&\n?#]+)/,
+      /(?:youtube\.com\/embed\/)([^&\n?#]+)/,
+      /(?:youtube\.com\/v\/)([^&\n?#]+)/,
+      /(?:m\.youtube\.com\/watch\?v=)([^&\n?#]+)/
+    ];
+
+    for (const pattern of youtubePatterns) {
+      const match = url.match(pattern);
+      if (match) {
+        const videoId = match[1];
+        return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      }
+    }
+
+    // Vimeo 썸네일
+    const vimeoPatterns = [
+      /vimeo\.com\/(\d+)/,
+      /player\.vimeo\.com\/video\/(\d+)/
+    ];
+
+    for (const pattern of vimeoPatterns) {
+      const match = url.match(pattern);
+      if (match) {
+        const videoId = match[1];
+        return `https://vumbnail.com/${videoId}.jpg`;
+      }
+    }
+
+    return null;
+  };
+
+  const getWebsitePreview = (url: string): { favicon: string; siteName: string } | null => {
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace('www.', '');
+
+      const siteMap: { [key: string]: { favicon: string; name: string } } = {
+        'github.com': { favicon: 'https://github.com/favicon.ico', name: 'GitHub' },
+        'youtube.com': { favicon: 'https://youtube.com/favicon.ico', name: 'YouTube' },
+        'vimeo.com': { favicon: 'https://vimeo.com/favicon.ico', name: 'Vimeo' },
+        'twitter.com': { favicon: 'https://twitter.com/favicon.ico', name: 'Twitter' },
+        'x.com': { favicon: 'https://x.com/favicon.ico', name: 'X' },
+        'facebook.com': { favicon: 'https://facebook.com/favicon.ico', name: 'Facebook' },
+        'instagram.com': { favicon: 'https://instagram.com/favicon.ico', name: 'Instagram' },
+        'notion.so': { favicon: 'https://notion.so/favicon.ico', name: 'Notion' },
+        'figma.com': { favicon: 'https://figma.com/favicon.ico', name: 'Figma' },
+        'google.com': { favicon: 'https://google.com/favicon.ico', name: 'Google' }
+      };
+
+      if (siteMap[domain]) {
+        return {
+          favicon: siteMap[domain].favicon,
+          siteName: siteMap[domain].name
+        };
+      }
+
+      return {
+        favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+        siteName: domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1)
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const isVideoUrl = (url: string): boolean => {
+    const videoExtensions = /\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v)(\?.*)?$/i;
+    if (videoExtensions.test(url)) return true;
+
+    const videoPlatforms = [
+      'youtube.com', 'youtu.be', 'm.youtube.com',
+      'vimeo.com', 'player.vimeo.com',
+      'twitch.tv', 'clips.twitch.tv',
+      'dailymotion.com', 'dai.ly'
+    ];
+
+    return videoPlatforms.some(platform => url.includes(platform));
+  };
 
   const exportAsImage = async (format: 'png' | 'jpeg') => {
     try {
@@ -124,7 +208,7 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
           color: #1f2937;
           border-bottom: 2px solid #e5e7eb;
           padding-bottom: 10px;
-        ">${canvasTitle} - 핀 정보</h2>
+        ">${canvasTitle}</h2>
 
         ${Object.entries(pinsByLayer).map(([layerName, layerPins]) => `
           <div style="margin-bottom: 30px;">
@@ -217,40 +301,104 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
                               ">이미지</div>
                             </div>
                           `;
-                        } else if (media.type === 'video') {
-                          return `
-                            <div style="
-                              width: 60px;
-                              height: 60px;
-                              border: 1px solid #d1d5db;
-                              border-radius: 4px;
-                              background-color: #1f2937;
-                              display: flex;
-                              align-items: center;
-                              justify-content: center;
-                              color: white;
-                              font-size: 10px;
-                              text-align: center;
-                            ">
-                              ▶<br/>동영상
-                            </div>
-                          `;
+                        } else if (media.type === 'video' || isVideoUrl(media.url)) {
+                          const videoThumbnail = getVideoThumbnail(media.url);
+                          if (videoThumbnail) {
+                            return `
+                              <div style="
+                                position: relative;
+                                width: 60px;
+                                height: 60px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                overflow: hidden;
+                                background-color: #1f2937;
+                              ">
+                                <img src="${videoThumbnail}"
+                                     alt="Video thumbnail"
+                                     style="
+                                       width: 100%;
+                                       height: 100%;
+                                       object-fit: cover;
+                                     "
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                <div style="
+                                  display: none;
+                                  width: 100%;
+                                  height: 100%;
+                                  align-items: center;
+                                  justify-content: center;
+                                  color: white;
+                                  font-size: 10px;
+                                  text-align: center;
+                                  background-color: #1f2937;
+                                ">▶<br/>동영상</div>
+                                <div style="
+                                  position: absolute;
+                                  bottom: 2px;
+                                  right: 2px;
+                                  background-color: rgba(0,0,0,0.7);
+                                  color: white;
+                                  font-size: 8px;
+                                  padding: 1px 3px;
+                                  border-radius: 2px;
+                                ">▶</div>
+                              </div>
+                            `;
+                          } else {
+                            return `
+                              <div style="
+                                width: 60px;
+                                height: 60px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 4px;
+                                background-color: #1f2937;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-size: 10px;
+                                text-align: center;
+                              ">
+                                ▶<br/>동영상
+                              </div>
+                            `;
+                          }
                         } else if (media.type === 'url') {
+                          const websitePreview = getWebsitePreview(media.url);
                           return `
                             <div style="
+                              position: relative;
                               width: 60px;
                               height: 60px;
                               border: 1px solid #d1d5db;
                               border-radius: 4px;
+                              overflow: hidden;
                               background-color: #3b82f6;
-                              display: flex;
-                              align-items: center;
-                              justify-content: center;
-                              color: white;
-                              font-size: 10px;
-                              text-align: center;
                             ">
-                              🔗<br/>링크
+                              ${websitePreview ? `
+                                <img src="${websitePreview.favicon}"
+                                     alt="${websitePreview.siteName}"
+                                     style="
+                                       width: 100%;
+                                       height: 100%;
+                                       object-fit: contain;
+                                       background-color: white;
+                                       padding: 8px;
+                                     "
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                              ` : ''}
+                              <div style="
+                                ${websitePreview ? 'display: none;' : 'display: flex;'}
+                                width: 100%;
+                                height: 100%;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-size: 10px;
+                                text-align: center;
+                                background-color: #3b82f6;
+                              ">🔗<br/>${websitePreview?.siteName || '링크'}</div>
                             </div>
                           `;
                         }
