@@ -223,6 +223,10 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       // Enable touch support for drawing
       enableRetinaScaling: false,
       allowTouchScrolling: false, // Disable to allow touch drawing
+      // Force enable all pointer events
+      stopContextMenu: true,
+      fireRightClick: true,
+      fireMiddleClick: true,
     });
 
     // Enable touch drawing support
@@ -244,7 +248,82 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
     // Force enable touch events on canvas
     if (typeof window !== 'undefined' && 'ontouchstart' in window) {
       console.log('Touch device detected, enabling touch drawing');
-      // Additional touch event setup if needed
+
+      // Force enable touch events - Fabric.js sometimes disables them
+      const originalAddEventListener = canvas.upperCanvasEl?.addEventListener;
+      if (originalAddEventListener && canvas.upperCanvasEl) {
+        // Simple touch drawing implementation using basic shapes
+        let isDrawing = false;
+        let pathPoints: { x: number; y: number }[] = [];
+
+        const getPointerFromTouch = (touch: Touch) => {
+          const rect = canvas.upperCanvasEl!.getBoundingClientRect();
+          return {
+            x: touch.clientX - rect.left,
+            y: touch.clientY - rect.top
+          };
+        };
+
+        canvas.upperCanvasEl.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          console.log('TouchStart - Simple implementation, isDrawingMode:', canvas.isDrawingMode);
+
+          if (canvas.isDrawingMode && e.touches.length === 1) {
+            isDrawing = true;
+            const pointer = getPointerFromTouch(e.touches[0]);
+            pathPoints = [pointer];
+            console.log('Started drawing at:', pointer);
+          }
+        }, { passive: false });
+
+        canvas.upperCanvasEl.addEventListener('touchmove', (e) => {
+          e.preventDefault();
+
+          if (isDrawing && canvas.isDrawingMode && e.touches.length === 1) {
+            const pointer = getPointerFromTouch(e.touches[0]);
+            pathPoints.push(pointer);
+            console.log('Drawing point:', pointer, 'Total points:', pathPoints.length);
+
+            // Create a simple line between last two points
+            if (pathPoints.length > 1) {
+              const lastPoint = pathPoints[pathPoints.length - 2];
+              const currentPoint = pathPoints[pathPoints.length - 1];
+
+              // Create a line using Fabric.js Line
+              const line = new (window as any).fabric.Line([
+                lastPoint.x, lastPoint.y,
+                currentPoint.x, currentPoint.y
+              ], {
+                stroke: canvas.freeDrawingBrush?.color || '#000000',
+                strokeWidth: canvas.freeDrawingBrush?.width || 2,
+                strokeLineCap: 'round',
+                selectable: false,
+                evented: false
+              });
+
+              canvas.add(line);
+              canvas.renderAll();
+            }
+          }
+        }, { passive: false });
+
+        canvas.upperCanvasEl.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          console.log('TouchEnd - Drawing finished, total points:', pathPoints.length);
+
+          if (isDrawing) {
+            isDrawing = false;
+            pathPoints = [];
+
+            // Trigger save after drawing
+            setTimeout(() => {
+              const hasObjects = canvas.getObjects().length > 0;
+              onDrawingChange?.(hasObjects);
+              console.log('Drawing saved, hasObjects:', hasObjects);
+            }, 100);
+          }
+        }, { passive: false });
+      }
     }
     
     // Configure drawing brush - Fabric.js v6 방식
@@ -508,9 +587,17 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
     if (!canvas) return;
 
     console.log('Setting drawing mode:', tool, 'brush size:', brushSize, 'color:', brushColor);
-    
+    console.log('Canvas elements:', {
+      upperCanvas: !!canvas.upperCanvasEl,
+      lowerCanvas: !!canvas.lowerCanvasEl,
+      touchSupport: 'ontouchstart' in window
+    });
+
     // Set drawing mode
     canvas.isDrawingMode = tool === 'draw' || tool === 'erase';
+
+    // Debug: Log when drawing mode changes
+    console.log('Canvas isDrawingMode set to:', canvas.isDrawingMode);
     
     // Enable object selection for all modes
     canvas.selection = true;
@@ -528,11 +615,26 @@ export const DrawingCanvas = forwardRef<any, DrawingCanvasProps>(({
       canvas.freeDrawingBrush = new PencilBrush(canvas);
       canvas.freeDrawingBrush.width = brushSize;
       canvas.freeDrawingBrush.color = brushColor;
-      
+
       // Configure line style
       const dashArray = lineStyle === 'dashed' ? [5, 5] : [];
       if (dashArray.length > 0) {
         (canvas.freeDrawingBrush as any).strokeDashArray = dashArray;
+      }
+
+      // Force re-enable touch events when switching to draw mode
+      if (canvas.upperCanvasEl && 'ontouchstart' in window) {
+        console.log('Re-enabling touch events for drawing mode');
+        canvas.upperCanvasEl.style.touchAction = 'none';
+
+        // Force Fabric.js to recognize touch events
+        (canvas as any).allowTouchScrolling = false;
+        (canvas as any).enablePointerEvents = true;
+
+        // Ensure canvas is ready for touch drawing
+        if ((canvas as any)._setupCurrentTransform) {
+          console.log('Fabric.js touch drawing setup available');
+        }
       }
       
     } else {
