@@ -6,7 +6,7 @@ import {
   FileText,
   List,
 } from 'lucide-react';
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -61,12 +61,53 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
   canvasTitle,
   pins,
   layers,
-) => {
+}) => {
   const { toast } = useToast();
 
-  // Helper functions for thumbnail generation
+  // PinHoverCard와 동일한 helper functions
+  const extractUrlsFromText = (text: string): string[] => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.match(urlRegex) || [];
+  };
+
+  const isImageUrl = (url: string): boolean => {
+    const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|tiff|ico)(\?.*)?$/i;
+    if (imageExtensions.test(url)) return true;
+
+    const imageHosts = [
+      'imgur.com', 'i.imgur.com',
+      'images.unsplash.com', 'unsplash.com',
+      'pixabay.com', 'pexels.com',
+      'flickr.com', 'staticflickr.com',
+      'googleusercontent.com',
+      'githubusercontent.com',
+      'cloudinary.com',
+      'imagekit.io',
+    ];
+
+    return imageHosts.some(host => url.includes(host));
+  };
+
+  const isVideoUrl = (url: string): boolean => {
+    const videoExtensions = /\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v)(\?.*)?$/i;
+    if (videoExtensions.test(url)) return true;
+
+    const videoPlatforms = [
+      'youtube.com', 'youtu.be', 'm.youtube.com',
+      'vimeo.com', 'player.vimeo.com',
+      'twitch.tv', 'clips.twitch.tv', 'm.twitch.tv',
+      'dailymotion.com', 'dai.ly',
+      'wistia.com', 'fast.wistia.com',
+      'loom.com',
+      'streamable.com',
+      'facebook.com/watch', 'fb.watch'
+    ];
+
+    return videoPlatforms.some(platform => url.includes(platform));
+  };
+
   const getVideoThumbnail = (url: string): string | null => {
-    // YouTube 썸네일
+    // YouTube 썸네일 (다양한 패턴 지원)
     const youtubePatterns = [
       /(?:youtube\.com\/watch\?v=)([^&\n?#]+)/,
       /(?:youtu\.be\/)([^&\n?#]+)/,
@@ -83,10 +124,12 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
       }
     }
 
-    // Vimeo 썸네일
+    // Vimeo 썸네일 (다양한 패턴 지원)
     const vimeoPatterns = [
       /vimeo\.com\/(\d+)/,
-      /player\.vimeo\.com\/video\/(\d+)/
+      /player\.vimeo\.com\/video\/(\d+)/,
+      /vimeo\.com\/channels\/\w+\/(\d+)/,
+      /vimeo\.com\/groups\/\w+\/videos\/(\d+)/
     ];
 
     for (const pattern of vimeoPatterns) {
@@ -97,55 +140,93 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
       }
     }
 
+    // Dailymotion 썸네일 (패턴 개선)
+    const dailymotionPatterns = [
+      /dailymotion\.com\/video\/([^_\?\&]+)/,
+      /dai\.ly\/([^_\?\&]+)/,
+      /dailymotion\.com\/embed\/video\/([^_\?\&]+)/
+    ];
+
+    for (const pattern of dailymotionPatterns) {
+      const match = url.match(pattern);
+      if (match) {
+        const videoId = match[1];
+        return `https://www.dailymotion.com/thumbnail/video/${videoId}`;
+      }
+    }
+
+    // Twitch 클립 썸네일 시도
+    if (url.includes('clips.twitch.tv')) {
+      const clipIdMatch = url.match(/clips\.twitch\.tv\/([^\/\?]+)/);
+      if (clipIdMatch) {
+        // Twitch는 공식 API가 필요하므로 일단 null 반환
+        return null;
+      }
+    }
+
+    // 비디오 파일의 경우 (mp4, webm 등)
+    if (/\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v)(\?.*)?$/i.test(url)) {
+      return null; // 비디오 파일은 썸네일 생성 불가
+    }
+
     return null;
   };
 
-  const getWebsitePreview = (url: string): { favicon: string; siteName: string } | null => {
+  const getWebsitePreview = (url: string): { favicon: string; siteName: string; description?: string } | null => {
     try {
       const urlObj = new URL(url);
       const domain = urlObj.hostname.replace('www.', '');
 
-      const siteMap: { [key: string]: { favicon: string; name: string } } = {
-        'github.com': { favicon: 'https://github.com/favicon.ico', name: 'GitHub' },
-        'youtube.com': { favicon: 'https://youtube.com/favicon.ico', name: 'YouTube' },
-        'vimeo.com': { favicon: 'https://vimeo.com/favicon.ico', name: 'Vimeo' },
-        'twitter.com': { favicon: 'https://twitter.com/favicon.ico', name: 'Twitter' },
-        'x.com': { favicon: 'https://x.com/favicon.ico', name: 'X' },
-        'facebook.com': { favicon: 'https://facebook.com/favicon.ico', name: 'Facebook' },
-        'instagram.com': { favicon: 'https://instagram.com/favicon.ico', name: 'Instagram' },
-        'notion.so': { favicon: 'https://notion.so/favicon.ico', name: 'Notion' },
-        'figma.com': { favicon: 'https://figma.com/favicon.ico', name: 'Figma' },
-        'google.com': { favicon: 'https://google.com/favicon.ico', name: 'Google' }
+      // 주요 사이트들의 아이콘과 이름 매핑 (더 많은 사이트 추가)
+      const siteMap: { [key: string]: { favicon: string; name: string; description?: string } } = {
+        'github.com': { favicon: 'https://github.com/favicon.ico', name: 'GitHub', description: '코드 저장소' },
+        'stackoverflow.com': { favicon: 'https://stackoverflow.com/favicon.ico', name: 'Stack Overflow', description: '개발자 Q&A' },
+        'medium.com': { favicon: 'https://medium.com/favicon.ico', name: 'Medium', description: '블로그 플랫폼' },
+        'reddit.com': { favicon: 'https://www.reddit.com/favicon.ico', name: 'Reddit', description: '커뮤니티' },
+        'twitter.com': { favicon: 'https://twitter.com/favicon.ico', name: 'Twitter', description: '소셜 미디어' },
+        'x.com': { favicon: 'https://x.com/favicon.ico', name: 'X', description: '소셜 미디어' },
+        'facebook.com': { favicon: 'https://facebook.com/favicon.ico', name: 'Facebook', description: '소셜 네트워크' },
+        'instagram.com': { favicon: 'https://instagram.com/favicon.ico', name: 'Instagram', description: '사진 공유' },
+        'linkedin.com': { favicon: 'https://linkedin.com/favicon.ico', name: 'LinkedIn', description: '비즈니스 네트워크' },
+        'notion.so': { favicon: 'https://notion.so/favicon.ico', name: 'Notion', description: '워크스페이스' },
+        'figma.com': { favicon: 'https://figma.com/favicon.ico', name: 'Figma', description: '디자인 도구' },
+        'google.com': { favicon: 'https://google.com/favicon.ico', name: 'Google', description: '검색 엔진' },
+        'youtube.com': { favicon: 'https://youtube.com/favicon.ico', name: 'YouTube', description: '동영상 플랫폼' },
+        'vimeo.com': { favicon: 'https://vimeo.com/favicon.ico', name: 'Vimeo', description: '동영상 플랫폼' },
+        'twitch.tv': { favicon: 'https://twitch.tv/favicon.ico', name: 'Twitch', description: '게임 스트리밍' },
+        'discord.com': { favicon: 'https://discord.com/favicon.ico', name: 'Discord', description: '음성 채팅' },
+        'slack.com': { favicon: 'https://slack.com/favicon.ico', name: 'Slack', description: '팀 협업' },
+        'trello.com': { favicon: 'https://trello.com/favicon.ico', name: 'Trello', description: '프로젝트 관리' },
+        'asana.com': { favicon: 'https://asana.com/favicon.ico', name: 'Asana', description: '업무 관리' },
+        'jira.atlassian.com': { favicon: 'https://jira.atlassian.com/favicon.ico', name: 'Jira', description: '이슈 추적' },
+        'confluence.atlassian.com': { favicon: 'https://confluence.atlassian.com/favicon.ico', name: 'Confluence', description: '문서 관리' },
+        'dropbox.com': { favicon: 'https://dropbox.com/favicon.ico', name: 'Dropbox', description: '클라우드 스토리지' },
+        'drive.google.com': { favicon: 'https://drive.google.com/favicon.ico', name: 'Google Drive', description: '클라우드 스토리지' },
+        'onedrive.live.com': { favicon: 'https://onedrive.live.com/favicon.ico', name: 'OneDrive', description: '클라우드 스토리지' },
+        'codepen.io': { favicon: 'https://codepen.io/favicon.ico', name: 'CodePen', description: '코드 실험실' },
+        'jsfiddle.net': { favicon: 'https://jsfiddle.net/favicon.ico', name: 'JSFiddle', description: '코드 실험실' },
+        'codesandbox.io': { favicon: 'https://codesandbox.io/favicon.ico', name: 'CodeSandbox', description: '온라인 IDE' },
+        'netlify.com': { favicon: 'https://netlify.com/favicon.ico', name: 'Netlify', description: '웹 호스팅' },
+        'vercel.com': { favicon: 'https://vercel.com/favicon.ico', name: 'Vercel', description: '웹 호스팅' },
+        'heroku.com': { favicon: 'https://heroku.com/favicon.ico', name: 'Heroku', description: '클라우드 플랫폼' },
+        'aws.amazon.com': { favicon: 'https://aws.amazon.com/favicon.ico', name: 'AWS', description: '클라우드 서비스' },
       };
 
       if (siteMap[domain]) {
         return {
           favicon: siteMap[domain].favicon,
-          siteName: siteMap[domain].name
+          siteName: siteMap[domain].name,
+          description: siteMap[domain].description
         };
       }
 
       return {
-        favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+        favicon: `https://${domain}/favicon.ico`,
         siteName: domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1)
       };
     } catch {
       return null;
     }
-  };
-
-  const isVideoUrl = (url: string): boolean => {
-    const videoExtensions = /\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v)(\?.*)?$/i;
-    if (videoExtensions.test(url)) return true;
-
-    const videoPlatforms = [
-      'youtube.com', 'youtu.be', 'm.youtube.com',
-      'vimeo.com', 'player.vimeo.com',
-      'twitch.tv', 'clips.twitch.tv',
-      'dailymotion.com', 'dai.ly'
-    ];
-
-    return videoPlatforms.some(platform => url.includes(platform));
   };
 
   const exportAsImage = async (format: 'png' | 'jpeg') => {
@@ -157,12 +238,11 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
 
       const canvas = await html2canvas(canvasElement, {
         backgroundColor: '#ffffff',
-        scale: 2, // High quality
+        scale: 2,
         useCORS: true,
         allowTaint: true,
       });
 
-      // Create download link
       const link = document.createElement('a');
       link.download = `${canvasTitle}.${format}`;
       link.href = canvas.toDataURL(`image/${format}`, 0.9);
@@ -210,112 +290,117 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
           padding-bottom: 10px;
         ">${canvasTitle}</h2>
 
-        ${Object.entries(pinsByLayer).map(([layerName, layerPins]) => `
-          <div style="margin-bottom: 30px;">
-            <h3 style="
-              font-size: 18px;
-              font-weight: 600;
-              color: #374151;
-              margin-bottom: 15px;
-              display: flex;
-              align-items: center;
+        <div style="
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+          gap: 20px;
+          margin-bottom: 30px;
+        ">
+          ${Object.entries(pinsByLayer).map(([layerName, layerPins]) => `
+            <div style="
+              break-inside: avoid;
+              background-color: #ffffff;
+              border: 1px solid #e5e7eb;
+              border-radius: 8px;
+              padding: 16px;
+              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             ">
-              <span style="
-                width: 12px;
-                height: 12px;
-                border-radius: 50%;
-                background-color: ${layers.find(l => l.name === layerName)?.color || '#6b7280'};
-                margin-right: 8px;
-              "></span>
-              ${layerName} (${layerPins.length}개)
-            </h3>
-
-            ${layerPins.map((pin, index) => `
-              <div style="
-                margin-bottom: 15px;
-                padding: 15px;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                background-color: #f9fafb;
+              <h3 style="
+                font-size: 16px;
+                font-weight: 600;
+                color: #374151;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                border-bottom: 1px solid #f3f4f6;
+                padding-bottom: 8px;
               ">
+                <span style="
+                  width: 10px;
+                  height: 10px;
+                  border-radius: 50%;
+                  background-color: ${layers.find(l => l.name === layerName)?.color || '#6b7280'};
+                  margin-right: 6px;
+                "></span>
+                ${layerName} (${layerPins.length}개)
+              </h3>
+
+              ${layerPins.map((pin, index) => {
+              // PinHoverCard와 동일한 로직으로 미디어 아이템 처리
+              const urls = extractUrlsFromText(pin.description);
+              const allMediaItems = [
+                ...(pin.mediaItems || []),
+                ...urls.map((url, urlIndex) => ({
+                  id: `extracted-${urlIndex}`,
+                  type: isImageUrl(url) ? 'image' as const :
+                        isVideoUrl(url) ? 'video' as const : 'url' as const,
+                  url,
+                  name: url
+                }))
+              ];
+
+              return `
                 <div style="
-                  font-weight: 600;
-                  font-size: 16px;
-                  color: #1f2937;
-                  margin-bottom: 8px;
-                ">${index + 1}. ${pin.title}</div>
-
-                ${pin.description ? `
+                  margin-bottom: 12px;
+                  padding: 12px;
+                  border: 1px solid #e5e7eb;
+                  border-radius: 6px;
+                  background-color: #f9fafb;
+                ">
                   <div style="
-                    color: #6b7280;
+                    font-weight: 600;
                     font-size: 14px;
-                    margin-bottom: 12px;
-                    line-height: 1.5;
-                  ">${pin.description}</div>
-                ` : ''}
+                    color: #1f2937;
+                    margin-bottom: 6px;
+                  ">${index + 1}. ${pin.title}</div>
 
-                ${pin.mediaItems && pin.mediaItems.length > 0 ? `
-                  <div style="
-                    margin-top: 10px;
-                  ">
+                  ${pin.description ? `
                     <div style="
+                      color: #6b7280;
                       font-size: 12px;
-                      color: #9ca3af;
                       margin-bottom: 8px;
-                    ">첨부 파일 (${pin.mediaItems.length}개):</div>
+                      line-height: 1.4;
+                    ">${pin.description}</div>
+                  ` : ''}
+
+                  ${allMediaItems.length > 0 ? `
                     <div style="
-                      display: flex;
-                      flex-wrap: wrap;
-                      gap: 8px;
+                      margin-top: 8px;
                     ">
-                      ${pin.mediaItems.map(media => {
-                        if (media.type === 'image') {
-                          return `
-                            <div style="
-                              position: relative;
-                              width: 60px;
-                              height: 60px;
-                              border: 1px solid #d1d5db;
-                              border-radius: 4px;
-                              overflow: hidden;
-                              background-color: #f3f4f6;
-                            ">
-                              <img src="${media.url}"
-                                   alt="${media.name || 'Image'}"
-                                   style="
-                                     width: 100%;
-                                     height: 100%;
-                                     object-fit: cover;
-                                   "
-                                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                              <div style="
-                                display: none;
-                                width: 100%;
-                                height: 100%;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 10px;
-                                color: #9ca3af;
-                                text-align: center;
-                                background-color: #f3f4f6;
-                              ">이미지</div>
-                            </div>
-                          `;
-                        } else if (media.type === 'video' || isVideoUrl(media.url)) {
-                          const videoThumbnail = getVideoThumbnail(media.url);
-                          if (videoThumbnail) {
+                      <div style="
+                        font-size: 10px;
+                        color: #9ca3af;
+                        margin-bottom: 6px;
+                      ">첨부 파일 (${allMediaItems.length}개):</div>
+                      <div style="
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 6px;
+                      ">
+                        ${allMediaItems.slice(0, 6).map(media => {
+                          // 타입 재감지
+                          let actualType = media.type;
+                          if (media.type === 'url') {
+                            if (isImageUrl(media.url)) {
+                              actualType = 'image';
+                            } else if (isVideoUrl(media.url)) {
+                              actualType = 'video';
+                            }
+                          }
+
+                          if (actualType === 'image') {
                             return `
                               <div style="
                                 position: relative;
-                                width: 60px;
-                                height: 60px;
+                                width: 50px;
+                                height: 50px;
                                 border: 1px solid #d1d5db;
-                                border-radius: 4px;
+                                border-radius: 3px;
                                 overflow: hidden;
-                                background-color: #1f2937;
+                                background-color: #f3f4f6;
                               ">
-                                <img src="${videoThumbnail}"
-                                     alt="Video thumbnail"
+                                <img src="${media.url}"
+                                     alt="${media.name || 'Image'}"
                                      style="
                                        width: 100%;
                                        height: 100%;
@@ -328,89 +413,183 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
                                   height: 100%;
                                   align-items: center;
                                   justify-content: center;
-                                  color: white;
                                   font-size: 10px;
+                                  color: #9ca3af;
                                   text-align: center;
-                                  background-color: #1f2937;
-                                ">▶<br/>동영상</div>
-                                <div style="
-                                  position: absolute;
-                                  bottom: 2px;
-                                  right: 2px;
-                                  background-color: rgba(0,0,0,0.7);
-                                  color: white;
-                                  font-size: 8px;
-                                  padding: 1px 3px;
-                                  border-radius: 2px;
-                                ">▶</div>
+                                  background-color: #f3f4f6;
+                                ">이미지</div>
                               </div>
                             `;
-                          } else {
+                          } else if (actualType === 'video') {
+                            const videoThumbnail = getVideoThumbnail(media.url);
+                            if (videoThumbnail) {
+                              return `
+                                <div style="
+                                  position: relative;
+                                  width: 50px;
+                                  height: 50px;
+                                  border: 1px solid #d1d5db;
+                                  border-radius: 3px;
+                                  overflow: hidden;
+                                  background-color: #1f2937;
+                                ">
+                                  <img src="${videoThumbnail}"
+                                       alt="Video thumbnail"
+                                       style="
+                                         width: 100%;
+                                         height: 100%;
+                                         object-fit: cover;
+                                       "
+                                       onerror="
+                                         const currentSrc = this.src;
+                                         if (currentSrc.includes('hqdefault')) {
+                                           this.src = currentSrc.replace('hqdefault', 'mqdefault');
+                                           return;
+                                         }
+                                         this.style.display='none';
+                                         this.nextElementSibling.style.display='block';
+                                       " />
+                                  <div style="
+                                    display: none;
+                                    width: 100%;
+                                    height: 100%;
+                                    align-items: center;
+                                    justify-content: center;
+                                    color: white;
+                                    font-size: 8px;
+                                    text-align: center;
+                                    background: linear-gradient(135deg, #ef4444 0%, #7c3aed 100%);
+                                  ">▶<br/>동영상</div>
+                                  <div style="
+                                    position: absolute;
+                                    bottom: 2px;
+                                    right: 2px;
+                                    background-color: rgba(0,0,0,0.7);
+                                    color: white;
+                                    font-size: 6px;
+                                    padding: 1px 2px;
+                                    border-radius: 2px;
+                                  ">▶</div>
+                                </div>
+                              `;
+                            }
+                            // 비디오 파일인 경우 첫 번째 프레임 시도 (PinHoverCard와 동일)
+                            if (/\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v)(\?.*)?$/i.test(media.url)) {
+                              // HTML2Canvas에서 video 렌더링이 어려우므로 단순한 비디오 아이콘 표시
+                              const fileName = media.url.split('/').pop()?.split('.')[0] || '동영상';
+                              const fileExt = media.url.split('.').pop()?.toUpperCase() || 'VIDEO';
+
+                              return `
+                                <div style="
+                                  width: 50px;
+                                  height: 50px;
+                                  border: 1px solid #d1d5db;
+                                  border-radius: 3px;
+                                  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+                                  display: flex;
+                                  align-items: center;
+                                  justify-content: center;
+                                  flex-direction: column;
+                                  position: relative;
+                                  overflow: hidden;
+                                ">
+                                  <div style="
+                                    color: white;
+                                    font-size: 16px;
+                                    margin-bottom: 3px;
+                                    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+                                  ">▶</div>
+                                  <div style="
+                                    color: white;
+                                    font-size: 6px;
+                                    text-align: center;
+                                    opacity: 0.9;
+                                    font-weight: 500;
+                                  ">${fileExt}</div>
+                                  <div style="
+                                    position: absolute;
+                                    bottom: 2px;
+                                    right: 2px;
+                                    background-color: rgba(239, 68, 68, 0.9);
+                                    color: white;
+                                    font-size: 6px;
+                                    padding: 1px 3px;
+                                    border-radius: 2px;
+                                    font-weight: 500;
+                                  ">📹</div>
+                                </div>
+                              `;
+                            }
                             return `
                               <div style="
-                                width: 60px;
-                                height: 60px;
+                                width: 50px;
+                                height: 50px;
                                 border: 1px solid #d1d5db;
-                                border-radius: 4px;
-                                background-color: #1f2937;
+                                border-radius: 3px;
+                                background: linear-gradient(135deg, #ef4444 0%, #7c3aed 100%);
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
                                 color: white;
-                                font-size: 10px;
+                                font-size: 8px;
                                 text-align: center;
+                              ">▶<br/>동영상</div>
+                            `;
+                          } else if (actualType === 'url') {
+                            // 웹사이트는 도메인명만 한줄로 표시
+                            const domain = new URL(media.url).hostname.replace('www.', '');
+
+                            return `
+                              <div style="
+                                width: 90%;
+                                height: 25px;
+                                border: 1px solid #d1d5db;
+                                border-radius: 3px;
+                                background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+                                display: flex;
+                                align-items: center;
+                                justify-content: flex-start;
+                                padding: 4px 8px;
+                                overflow: hidden;
+                                margin: 2px 0;
                               ">
-                                ▶<br/>동영상
+                                <div style="
+                                  font-size: 9px;
+                                  color: #1e40af;
+                                  text-align: left;
+                                  line-height: 1.2;
+                                  white-space: nowrap;
+                                  font-weight: 500;
+                                ">${domain}</div>
                               </div>
                             `;
                           }
-                        } else if (media.type === 'url') {
-                          const websitePreview = getWebsitePreview(media.url);
-                          return `
-                            <div style="
-                              position: relative;
-                              width: 60px;
-                              height: 60px;
-                              border: 1px solid #d1d5db;
-                              border-radius: 4px;
-                              overflow: hidden;
-                              background-color: #3b82f6;
-                            ">
-                              ${websitePreview ? `
-                                <img src="${websitePreview.favicon}"
-                                     alt="${websitePreview.siteName}"
-                                     style="
-                                       width: 100%;
-                                       height: 100%;
-                                       object-fit: contain;
-                                       background-color: white;
-                                       padding: 8px;
-                                     "
-                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                              ` : ''}
-                              <div style="
-                                ${websitePreview ? 'display: none;' : 'display: flex;'}
-                                width: 100%;
-                                height: 100%;
-                                align-items: center;
-                                justify-content: center;
-                                color: white;
-                                font-size: 10px;
-                                text-align: center;
-                                background-color: #3b82f6;
-                              ">🔗<br/>${websitePreview?.siteName || '링크'}</div>
-                            </div>
-                          `;
-                        }
-                        return '';
-                      }).join('')}
+                          return '';
+                        }).join('')}
+                        ${allMediaItems.length > 6 ? `
+                          <div style="
+                            width: 50px;
+                            height: 50px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 3px;
+                            background-color: #f3f4f6;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 8px;
+                            color: #6b7280;
+                            text-align: center;
+                          ">+${allMediaItems.length - 6}<br/>더</div>
+                        ` : ''}
+                      </div>
                     </div>
-                  </div>
-                ` : ''}
-              </div>
-            `).join('')}
-          </div>
-        `).join('')}
+                  ` : ''}
+                </div>
+              `;
+            }).join('')}
+            </div>
+          `).join('')}
+        </div>
 
         <div style="
           margin-top: 30px;
@@ -465,22 +644,28 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
       document.body.removeChild(tempContainer);
 
       if (format === 'pdf') {
-        // PDF는 별도 페이지로 구성
+        // PDF는 가로 배치로 한 페이지에
         const pdf = new jsPDF({
-          orientation: 'portrait',
+          orientation: 'landscape',
           unit: 'mm',
           format: 'a4',
         });
 
-        // 첫 페이지: 캔버스
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
 
-        const canvasRatio = Math.min(pdfWidth / canvasImg.width, (pdfHeight - 20) / canvasImg.height);
+        // 캔버스와 핀정보를 좌우로 배치
+        const canvasRatio = Math.min((pdfWidth * 0.6) / canvasImg.width, (pdfHeight - 20) / canvasImg.height);
         const canvasWidth = canvasImg.width * canvasRatio;
         const canvasHeight = canvasImg.height * canvasRatio;
-        const canvasX = (pdfWidth - canvasWidth) / 2;
-        const canvasY = 10;
+        const canvasX = 10;
+        const canvasY = (pdfHeight - canvasHeight) / 2;
+
+        const pinInfoRatio = Math.min((pdfWidth * 0.35) / pinInfoImg.width, (pdfHeight - 20) / pinInfoImg.height);
+        const pinInfoWidth = pinInfoImg.width * pinInfoRatio;
+        const pinInfoHeight = pinInfoImg.height * pinInfoRatio;
+        const pinInfoX = canvasX + canvasWidth + 10;
+        const pinInfoY = (pdfHeight - pinInfoHeight) / 2;
 
         pdf.addImage(
           canvasImg.toDataURL('image/png'),
@@ -490,15 +675,6 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
           canvasWidth,
           canvasHeight
         );
-
-        // 두 번째 페이지: 핀 정보
-        pdf.addPage();
-
-        const pinInfoRatio = Math.min(pdfWidth / pinInfoImg.width, (pdfHeight - 20) / pinInfoImg.height);
-        const pinInfoWidth = pinInfoImg.width * pinInfoRatio;
-        const pinInfoHeight = pinInfoImg.height * pinInfoRatio;
-        const pinInfoX = (pdfWidth - pinInfoWidth) / 2;
-        const pinInfoY = 10;
 
         pdf.addImage(
           pinInfoImg.toDataURL('image/png'),
@@ -640,7 +816,7 @@ export const CanvasExporter: React.FC<CanvasExporterProps> = ({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => exportWithPinInfo('pdf')}>
           <FileText className="w-4 h-4 mr-2" />
-          PDF + 핀 정보
+          PDF + 핀 정보 (한 페이지)
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
