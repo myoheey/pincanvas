@@ -10,6 +10,7 @@ import CanvasView from "./pages/CanvasView";
 import Auth from "./pages/Auth";
 import { Profile } from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword";
+import PrivacyConsent from "./pages/PrivacyConsent";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,6 +24,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/privacy-consent" element={<PrivacyConsent />} />
             <Route path="/" element={<Index />} />
             <Route path="/canvas/:id" element={<CanvasView />} />
             <Route path="/profile" element={<Profile />} />
