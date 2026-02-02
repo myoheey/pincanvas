@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,11 +10,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { Chrome, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
+interface LocationState {
+  message?: string;
+}
+
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as LocationState;
   const { signIn, signUp, signInWithGoogle, user, loading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string>(locationState?.message || '');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   
@@ -47,38 +53,50 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError('');
 
-    const { error } = await signUp(signupEmail, signupPassword, fullName);
-    
-    if (error) {
-      setError(error.message);
-    } else {
-      setError('회원가입이 완료되었습니다. 이메일을 확인해주세요.');
+    // 입력값 검증
+    if (!signupEmail || !signupPassword) {
+      setError('이메일과 비밀번호를 입력해주세요.');
+      return;
     }
-    setIsLoading(false);
+
+    if (signupPassword.length < 6) {
+      setError('비밀번호는 6자 이상이어야 합니다.');
+      return;
+    }
+
+    // 개인정보 동의 페이지로 이동
+    navigate('/privacy-consent', {
+      state: {
+        signupData: {
+          email: signupEmail,
+          password: signupPassword,
+          fullName: fullName
+        }
+      }
+    });
   };
 
   const handleGoogleSignIn = async () => {
     console.log('Google sign in button clicked');
     setIsLoading(true);
     setError('');
-    
+
     try {
       console.log('Starting Google sign in...');
       const redirectUrl = `${window.location.origin}/`;
       console.log('Redirect URL:', redirectUrl);
-      
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl
         }
       });
-      
+
       console.log('Google OAuth result:', { data, error });
-      
+
       if (error) {
         console.error('Google OAuth error:', error);
         setError(`구글 로그인 실패: ${error.message}`);
@@ -87,8 +105,17 @@ const Auth = () => {
       console.error('Google sign in catch error:', err);
       setError(`구글 로그인 중 오류가 발생했습니다: ${err}`);
     }
-    
+
     setIsLoading(false);
+  };
+
+  const handleGoogleSignUp = () => {
+    // 개인정보 동의 페이지로 이동 (Google 회원가입용)
+    navigate('/privacy-consent', {
+      state: {
+        isGoogleSignup: true
+      }
+    });
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -282,10 +309,10 @@ const Auth = () => {
                     </div>
                   </div>
 
-                  <Button 
-                    variant="outline" 
-                    className="w-full" 
-                    onClick={handleGoogleSignIn}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleGoogleSignUp}
                     disabled={isLoading}
                   >
                     <Chrome className="w-4 h-4 mr-2" />
